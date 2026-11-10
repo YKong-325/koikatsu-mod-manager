@@ -2,7 +2,7 @@
 
 在浏览器中管理 Koikatsu 的 Mod、角色卡、服装卡和场景。
 
-![Mod 列表：包内预览图、按作品/角色/作者检索、批量勾选与停用](docs/screenshots/mods.webp)
+![Mod 列表：包内预览图、按作品/角色/作者检索、按引用状态筛选，勾选后可批量提交缩略图或删除](docs/screenshots/mods.webp)
 
 ## 安装与启动
 
