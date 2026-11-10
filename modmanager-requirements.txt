@@ -1,0 +1,3 @@
+Pillow>=11
+msgpack>=1
+UnityPy==1.25.4

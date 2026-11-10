@@ -1,0 +1,31 @@
+# Local configuration and generated catalogs (including user tags/previews).
+/config.json
+/config.tmp
+/catalog/
+/runtime/
+/release/
+/zipmod_inventory.csv
+/zipmod_inventory._mods.csv
+/maintenance/legacy_inventory_backup/
+
+# Scratch output of the command line tools.
+/preview-renders/
+/_renders_pil/
+
+# Python and editor/runtime artifacts.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.log
+*.tmp
+.pytest_cache/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Game resources and local trash must not be published with the program.
+/mods/
+/UserData/
+/modtrash/
+/UserData_trash/

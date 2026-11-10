@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Koikatsu Mod Manager</title>
+<link rel="icon" href="/assets/app.ico">
+<link rel="stylesheet" href="/theme.css">
+<body class="startup-page">
+<main class="startup-content">
+<div class="brandbar"><img class="brand-mark" src="/assets/app-mark.png" alt=""><div class="brand-title">
+<div class="archive-number">MODS / CARDS / SCENES</div>
+<h1>Koikatsu <span>Mod Manager</span></h1>
+</div></div>
+<div class="startup-track" aria-hidden="true"><span></span></div>
+<p id="startupStatus" role="status">正在读取目录与索引…</p>
+</main>
+<script>
+async function poll(){
+try{
+const response=await fetch('/api/config');
+if(!response.ok)throw new Error('无法连接管理器');
+const config=await response.json();
+if(!config.starting){location.replace(config.ready?'/gallery.html':'/settings');return}
+const progress=await fetch('/api/progress');
+if(progress.ok)document.getElementById('startupStatus').textContent=(await progress.json()).message;
+}catch(error){document.getElementById('startupStatus').textContent=error.message}
+setTimeout(poll,700);
+}poll();
+</script>
+<script src="/browser-ui.js"></script>
+</body>
+</html>

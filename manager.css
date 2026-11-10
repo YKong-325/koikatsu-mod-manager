@@ -1,0 +1,176 @@
+[hidden]{display:none!important}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:18px;padding:0 28px 24px;align-items:start}
+.library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:18px;padding:0 28px 24px;align-items:start}
+.images{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+.images a{display:block;min-width:0;aspect-ratio:1;overflow:hidden}
+.images img{display:block;width:100%;height:100%;object-fit:contain}
+.library-card img{display:block;width:100%}
+.pager{display:flex;align-items:center}
+article{position:relative;min-width:0}
+.actions{position:absolute;top:8px;right:8px}
+/* The selection box sits on the cover itself, where a batch action is
+   discoverable; the old ::after tick only appeared once it was too late. */
+.pick{position:absolute;top:8px;left:8px;z-index:4;display:grid;place-items:center;
+  width:26px;height:26px;padding:0;border:1px solid var(--edge);border-radius:var(--radius-sm);
+  background:#ffffffeb;box-shadow:0 1px 3px #29363c26;cursor:pointer;
+  transition:border-color .16s var(--ease),box-shadow .2s var(--ease),
+    transform .16s var(--ease),background-color .16s var(--ease)}
+.pick:hover{border-color:var(--edge-active);background:#fff;transform:translateY(-1px);
+  box-shadow:0 4px 10px #39b9c83d}
+.pick:has(input:checked){border-color:#17899b;background:#fff;box-shadow:0 0 0 3px #39b9c826}
+.pick:has(input:checked):hover{transform:none;box-shadow:0 0 0 3px #39b9c83d}
+.pick input{width:16px;height:16px;margin:0;accent-color:#17899b;cursor:pointer}
+
+/* Batch selection: the same set drives the review list and the batch disable
+   action, so a selected card has to be unmistakable. */
+.bulk{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex-basis:100%;
+  padding-top:10px;border-top:1px dashed #cfe0e5}
+.bulk-count{color:#677d85;font-size:13px;margin-right:4px}
+.bulk-action{min-height:34px;padding:5px 12px;font-size:13px}
+.bulk-delete{color:#c34c74;background:#fff6f8;border-color:#e6c3d0}
+.bulk-delete:not(:disabled):hover{background:#ffe9f0;border-color:#dfa8bb;color:#a83a5c}
+.bulk-render{color:#fff;background:#c5304a;border-color:#a9243c}
+.bulk-render:not(:disabled):hover{background:#a9243c;border-color:#8d1e32;color:#fff;
+  transform:translateY(-1px);box-shadow:0 6px 14px #c5304a33}
+#export,#undo{margin-left:auto}
+#export+#undo{margin-left:0}
+/* The batch bar is what you reach for after scrolling a long grid, so it rides
+   along the top of the window instead of making you scroll back up. It has to
+   live outside <header>: a sticky child cannot escape a parent it is taller
+   than, and every filter row above it is exactly that. */
+.dock{position:sticky;top:0;z-index:45;background:#fff;padding:0 28px;
+  border-bottom:1px solid #e2ecef;box-shadow:0 2px 6px #10323c14}
+.dock:empty{display:none}
+.dock .bulk{flex-basis:auto;padding:8px 0;border-top:0;margin:0}
+/* The dependency bar is the other row that has to survive a scroll: it counts
+   the cards ticked further down, and the ticked cards are exactly what the
+   download button acts on. */
+.dock .detection-actions{padding:8px 0;margin:0}
+article{position:relative}
+article.selected{border-color:#39b9c8;box-shadow:0 0 0 2px #39b9c855}
+article.marquee-hit{border-color:#39b9c8;background:#eaf7f9}
+.marquee{position:fixed;z-index:60;pointer-events:none;border:1px solid #39b9c8;
+  background:rgba(57,185,200,.14);border-radius:2px}
+body.marquee-active{user-select:none;cursor:crosshair}
+.empty{display:grid;place-items:center}
+#dependencyPanel{padding:0 28px 24px}
+#dependencyPanel .detection-summary{padding-top:0}
+#dependencyList{padding:0}
+.directory-settings{align-self:center;margin-left:auto;color:#175a89;padding:8px;white-space:nowrap}
+.detection-summary{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 18px;padding:12px 0;border-top:1px solid #d8dde2;line-height:1.6}
+.detection-summary .notice{flex-basis:100%;margin:0}
+.detection-label{font-size:13px;font-weight:600;margin-top:10px;overflow-wrap:anywhere}
+.detection-download{align-self:center;margin-left:auto;min-height:32px;padding:4px 14px;
+  font-size:13px;color:#fff;background:#c5304a;border:1px solid #a9243c;border-radius:4px}
+.detection-download:not(:disabled):hover{background:#a9243c;border-color:#8d1e32;color:#fff;
+  transform:translateY(-1px);box-shadow:0 6px 14px #c5304a33}
+/* Picking which cards a download round should cover: the note explains the
+   default, the two plain buttons narrow or reset it, the filled one runs it. */
+.detection-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  margin-left:auto;flex-basis:100%;justify-content:flex-end}
+.detection-actions .notice{margin:0;flex-basis:auto}
+.detection-actions .detection-download{margin-left:0}
+.detection-plain{min-height:32px;padding:4px 12px;font-size:13px}
+/* Where a finished download says what it did. It sits above the grid and is
+   left alone by every re-render, so the answer stays on screen instead of being
+   replaced by the result count. */
+.detection-report{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;
+  margin:0 0 12px;padding:10px 14px;border:1px solid #d5e2e7;border-left:3px solid #17899b;
+  border-radius:6px;background:#f7fbfc;line-height:1.6}
+.detection-report strong{font-size:13px}
+/* Only the report's own lines span the block; a .notice inside a list row is
+   just the tail of that row and must stay on the same line. */
+.detection-report > .notice{flex-basis:100%;margin:0}
+.detection-report details{flex-basis:100%;margin-top:2px}
+.detection-report summary{cursor:pointer;font-size:13px;color:#087e94;width:max-content}
+.detection-report summary:hover{color:#0a6d7f}
+.detection-missing{max-height:220px;overflow:auto;margin:8px 0;padding:0;list-style:none;
+  border:1px solid #e2ebef;border-radius:6px;background:#fff}
+.detection-missing li{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;
+  padding:5px 10px;border-bottom:1px solid #eef3f5;font-size:12px}
+.detection-missing li:last-child{border-bottom:0}
+.detection-missing code{font-size:12px;background:#eef4f6;border-radius:3px;padding:1px 5px}
+.detection-missing a{color:#087e94}
+.library-card img{object-fit:contain;height:240px;aspect-ratio:auto}
+.library-card .empty{height:240px}
+.library-details{padding-top:6px}
+.library-details li{font-size:12px}
+.library-details button{padding:3px 6px}
+.controls input{max-width:100%;min-width:0}
+.name{padding-right:24px}
+.library-card .name{padding-right:0}
+.notice{color:#65727c;font-size:12px;margin-top:8px}
+.toolbar-action{white-space:nowrap}
+@media(max-width:600px){.library-grid{padding:0 12px 16px}.controls input{width:100%}.library-card img,.library-card .empty{height:220px}}
+.relation-action{display:block;margin:10px 0;color:#175a89;border-color:#8caec8;background:#f1f7fb}
+.tabs{flex-wrap:wrap}
+.installed{color:#226c56}
+button:focus-visible{outline:2px solid #175a89;outline-offset:2px}
+.offline-banner{position:fixed;left:0;right:0;top:0;z-index:99;padding:9px 16px;background:#8f1f2f;color:#fff;font-size:13px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.28)}
+
+/* Hover zoom: covers are ~105 px wide, too small to compare two recolours.
+   The panel is opaque on purpose — rendered previews are transparent, and a
+   white backdrop is the only way they read correctly. It fades in rather than
+   popping: the fade touches opacity only, so the panel measured for placement
+   is never a scaled-down version of itself. */
+.images a img,.library-card > img{cursor:zoom-in}
+.zoom-tip{position:fixed;left:0;top:0;z-index:80;pointer-events:none;padding:6px;
+  border-radius:10px;background:#fff;box-shadow:0 10px 30px #1d2b3355,0 0 0 1px #cfd8de;
+  animation:zoom-tip-in .13s var(--ease) both}
+@keyframes zoom-tip-in{from{opacity:0}to{opacity:1}}
+.zoom-tip img{display:block;width:auto;height:auto;border-radius:6px;
+  max-width:min(540px,50vw);max-height:min(540px,62vh)}
+
+/* Deleted mods. A disabled archive is still on disk, so this list is a recovery
+   screen rather than a graveyard: every row says whether it can come back and
+   why not when it cannot. */
+#trashList{padding:0 28px 24px}
+.trash-help{max-width:900px;line-height:1.6}
+.trash-rows{display:flex;flex-direction:column;gap:8px;margin-top:12px;max-width:1100px}
+.trash-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto auto;
+  gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);
+  border-radius:var(--radius);background:#fff;
+  transition:border-color .16s var(--ease),box-shadow .2s var(--ease),
+    background-color .16s var(--ease)}
+/* A row that answers the pointer: the outline warms and the cover leans in a
+   little, so scanning 600 rows does not feel like reading a spreadsheet. */
+.trash-row:hover{border-color:#aecdd6;box-shadow:var(--shadow-hover)}
+.trash-row.selected{border-color:#39b9c8;box-shadow:0 0 0 2px #39b9c855;background:#f4fcfd}
+.trash-row.selected:hover{box-shadow:0 0 0 2px #39b9c855,var(--shadow-hover)}
+.trash-pick-box{display:grid;place-items:center}
+.trash-pick{align-self:center}
+.trash-pick{width:16px;height:16px;margin:0;accent-color:#17899b;cursor:pointer}
+.trash-main{min-width:0}
+.trash-file{font-weight:600;overflow-wrap:anywhere}
+.trash-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:3px;
+  color:#5d717a;font-size:12px}
+.trash-path{margin-top:2px;color:#8a9aa2;font-size:11px;overflow-wrap:anywhere}
+.trash-state{font-size:12px;max-width:280px;text-align:right;overflow-wrap:anywhere}
+.trash-state.ready{color:#1f7a5c;font-weight:600}
+.trash-state.done{color:#8a9aa2}
+.trash-state.blocked{color:#a8452a}
+.trash-one{min-width:72px}
+.trash-thumb{width:52px;height:52px;border:1px solid #d8e2e6;border-radius:6px;
+  background:#f4f7f8;display:grid;place-items:center;overflow:hidden;flex:none}
+.trash-thumb img{display:block;width:100%;height:100%;object-fit:cover;
+  transition:transform .3s var(--ease)}
+.trash-row:hover .trash-thumb img{transform:scale(1.06)}
+.trash-thumb.empty::after{content:"";width:22px;height:22px;opacity:.35;
+  background:url("assets/icons/package.svg") center/22px no-repeat}
+/* Permanent deletion wears the same crimson as the batch "render covers"
+   button: both are the do-it-now action of their own view. What marks the
+   deletion as irreversible is the confirm dialog and the wording, not a
+   second shade of red -- two near-identical reds only made both look muddy. */
+.trash-purge-one{min-width:72px;color:#fff;background:#c5304a;border-color:#a9243c}
+.trash-purge-one:not(:disabled):hover{background:#a9243c;border-color:#8d1e32;color:#fff;
+  transform:translateY(-1px);box-shadow:0 6px 14px #c5304a33}
+.bulk-danger{color:#fff;background:#c5304a;border-color:#a9243c}
+.bulk-danger:not(:disabled):hover{background:#a9243c;border-color:#8d1e32;color:#fff;
+  transform:translateY(-1px);box-shadow:0 6px 14px #c5304a33}
+@media(max-width:700px){
+  #trashList{padding:0 12px 16px}
+  .trash-row{grid-template-columns:auto auto minmax(0,1fr);row-gap:8px}
+  .trash-state{grid-column:2/4;text-align:left;justify-self:start}
+  .trash-one,.trash-purge-one{grid-column:3;justify-self:start}
+}
+

@@ -1,0 +1,42 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Only the scanner's own libraries are needed: UnityPy is imported inside
+      # a function and never reached by these checks.
+      - name: Install Pillow and msgpack
+        run: python -m pip install --quiet --upgrade pip pillow msgpack
+
+      - name: Python checks
+        shell: bash
+        run: |
+          python -u maintenance/Test-ModRecovery.py
+          python -u maintenance/Test-ModCatalogServer.py
+
+      - name: Page checks
+        shell: bash
+        run: |
+          node maintenance/Test-AppShell.js
+          node maintenance/Test-DepsDownload.js
+          node maintenance/Test-ModActions.js
+          node maintenance/Test-ModSearch.js
+          node maintenance/Test-ModSweepScroll.js
+          node maintenance/Test-ModTrash.js
