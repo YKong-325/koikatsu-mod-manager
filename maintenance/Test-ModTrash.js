@@ -82,6 +82,10 @@ tick().then(() => {
   assert.equal(boxes[3].disabled, true, 'a deletion from another mods folder is not');
 
   assert.match($('trashCount').textContent, /可恢复 1 个/);
+  // A row whose .disabled file is gone can never be ticked, so the count has to
+  // say it is there - otherwise the list looks clean while it is not.
+  assert.match($('trashCount').textContent, /失效 1 条/);
+  assert.match($('trashClean').textContent, /清理失效记录（1）/);
   assert.equal($('trashRestore').disabled, true, 'nothing selected yet');
   assert.equal($('trashPurge').disabled, true, 'nothing selected yet');
   // Restoring is the safe half of the pair, so it stays a plain white button;
@@ -151,8 +155,27 @@ tick().then(() => {
       assert.equal(purges.length, 1, 'one request for one row');
       assert.deepEqual(purges[0].ids, ['bbb']);
       assert.match($('status').textContent, /已彻底删除 1 条记录/);
-      console.log('PASS: deleted mods list with a cover, a reason and a red '
-        + 'permanent-delete button; a selection restores in one request');
+
+      /* --- cleaning the rows nothing can be done with -------------------- */
+
+      // The stale row is still listed and still untickable; the cleanup button
+      // is the only way to drop it, and it must send that row alone.
+      const clean = $('trashClean');
+      assert.equal(clean.disabled, false, 'the stale row makes the button usable');
+      assert.match(clean.textContent, /清理失效记录（1）/);
+      app.window.confirm = () => false;
+      clean.click();
+      assert.equal(purges.length, 1, 'a refused confirmation cleans nothing');
+      app.window.confirm = () => true;
+      clean.click();
+      tick().then(() => {
+        assert.equal(purges.length, 2, 'one request with the stale rows');
+        assert.deepEqual(purges[1].ids, ['bbb']);
+        assert.match($('status').textContent, /已清理 1 条失效记录/);
+        console.log('PASS: deleted mods list with a cover, a reason and a red '
+          + 'permanent-delete button; a selection restores in one request; '
+          + 'rows whose file is gone can be cleared in bulk');
+      }).catch(error => { console.error(error); process.exit(1); });
     }).catch(error => { console.error(error); process.exit(1); });
   }).catch(error => { console.error(error); process.exit(1); });
 }).catch(error => { console.error(error); process.exit(1); });

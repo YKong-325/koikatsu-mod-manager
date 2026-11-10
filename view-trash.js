@@ -41,18 +41,28 @@
   purgeButton.id = 'trashPurge';
   purgeButton.type = 'button';
 
+  /* Rows whose .disabled file is gone cannot be restored, so their checkbox
+     stays disabled and "select all restorable" can never reach them. Without
+     this button such a record would sit in the list forever, one click at a
+     time: it only drops log lines and never touches a file. */
+  const cleanButton = el('button', '清理失效记录', 'bulk-action');
+  cleanButton.id = 'trashClean';
+  cleanButton.type = 'button';
+
   const refreshButton = el('button', '刷新', 'bulk-action');
   refreshButton.id = 'trashRefresh';
   refreshButton.type = 'button';
 
-  controls.append(count, selectAll, restoreButton, purgeButton, refreshButton);
+  controls.append(count, selectAll, restoreButton, purgeButton, cleanButton,
+    refreshButton);
 
   const element = el('div');
   element.id = 'trashList';
 
   const HELP = '删除只是把压缩包在原目录改名成 .disabled，文件没有离开硬盘。'
     + '这里的记录来自服务器删除日志，换标签页或重启管理器后仍然可以恢复。'
-    + '红色的「彻底删除」才会真正移除文件，且无法再通过本工具找回。';
+    + '红色的「彻底删除」才会真正移除文件，且无法再通过本工具找回。'
+    + '原件已经不在的那些记录没法恢复，用「清理失效记录」一次性从列表里去掉。';
 
   const help = el('p', HELP, 'notice trash-help');
   element.append(help);
@@ -62,6 +72,12 @@
 
   const canRestore = item => item.available && !item.restored
     && !item.otherRoot && !item.conflict;
+
+  /* No .disabled file behind the record: nothing to restore and nothing to
+     erase, so dropping the line is the only thing left to do with it. Records
+     from another mods folder are excluded - the server refuses those, because
+     it cannot check a path it is not currently pointed at. */
+  const canClean = item => !item.otherRoot && !item.available;
 
   function megabytes(bytes) {
     if (!bytes) return '—';
@@ -88,8 +104,11 @@
   function updateChrome() {
     const usable = items.filter(canRestore);
     const chosen = usable.filter(item => selected.has(item.id));
-    count.textContent = usable.length
-      ? `可恢复 ${usable.length} 个 · 已选 ${chosen.length}` : '没有可恢复的记录';
+    const stale = items.filter(canClean);
+    const parts = [usable.length ? `可恢复 ${usable.length} 个` : '没有可恢复的记录'];
+    if (usable.length) parts.push(`已选 ${chosen.length}`);
+    if (stale.length) parts.push(`失效 ${stale.length} 条`);
+    count.textContent = parts.join(' · ');
     selectAll.disabled = !usable.length || busy;
     selectAll.textContent = chosen.length && chosen.length === usable.length
       ? '取消全选' : '全选可恢复';
@@ -98,6 +117,9 @@
     purgeButton.disabled = !chosen.length || busy;
     purgeButton.textContent = chosen.length
       ? `彻底删除选中（${chosen.length}）` : '彻底删除选中';
+    cleanButton.disabled = !stale.length || busy;
+    cleanButton.textContent = stale.length
+      ? `清理失效记录（${stale.length}）` : '清理失效记录';
     refreshButton.disabled = busy || loading;
   }
 
@@ -271,6 +293,48 @@
   }
 
   selectAll.type = 'button';
+  /* Drop the log lines whose archive is gone. The server never unlinks a file it
+     cannot match to its own log entry, and a record without a .disabled file has
+     none to match, so this rewrites the log and nothing else. Requests are
+     chunked because one purge call is capped. */
+  async function cleanStale() {
+    const wanted = items.filter(canClean);
+    if (!wanted.length || busy) return;
+    if (!window.confirm(`清理 ${wanted.length} 条失效记录？\n\n`
+      + '这些记录对应的 .disabled 文件都已经不在硬盘上，只能从列表里移除，'
+      + '不会删除任何文件。')) return;
+    const CHUNK = 400;
+    const ids = wanted.map(item => item.id);
+    const failures = [];
+    let purged = 0;
+    busy = true;
+    selected = new Set();
+    renderRows();
+    setStatus(`正在清理 ${ids.length} 条失效记录…`);
+    try {
+      for (let start = 0; start < ids.length; start += CHUNK) {
+        const result = await api.mutate('/api/purge',
+          {ids: ids.slice(start, start + CHUNK)});
+        purged += result.purged || 0;
+        failures.push(...(result.failures || []));
+        setStatus(`正在清理失效记录 · ${Math.min(start + CHUNK, ids.length)}`
+          + `/${ids.length}…`);
+      }
+      busy = false;
+      await load();
+      preserveViewport(() => {
+        setStatus(`已清理 ${purged} 条失效记录` +
+          (failures.length ? ` · ${failures.length} 条未能清理` : ''));
+      });
+      return;
+    } catch (error) {
+      setStatus('清理失效记录失败：' + error.message);
+    } finally {
+      busy = false;
+      renderRows();
+    }
+  }
+
   selectAll.onclick = () => {
     const usable = items.filter(canRestore);
     const all = usable.every(item => selected.has(item.id));
@@ -279,6 +343,7 @@
   };
   restoreButton.onclick = () => restore([...selected]);
   purgeButton.onclick = () => purge([...selected]);
+  cleanButton.onclick = () => cleanStale();
   refreshButton.onclick = () => { load(); };
 
   KK.registerView({
