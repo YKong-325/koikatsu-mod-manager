@@ -38,7 +38,7 @@
 在“依赖检查”里勾选卡片（一张都不勾表示全部缺失项），点“下载缺失 Mod”。程序会逐个确认每个缺失 GUID 在公共整合站里有没有对应包，只下载真正缺的那几个，不会整包下载。
 
 - 数据来自公共整合站（`sideload.betterrepack.com` 的 `KKEC` 目录），本项目不托管、也不分发任何 Mod。
-- **第一次点要读完整个索引**（七千多个归档），视网络通常要半小时以上，页面会显示进度并持续刷新。读完缓存一周，之后再查几乎是秒级。中途关掉不会损坏缓存，下次会重新开始。
+- **第一次点要先读一遍公共索引**（七千多个归档），视网络通常半小时以上，页面会显示进度并持续刷新。**读完当场就能下载，没有等待期。** 读到的目录清单会存成 `catalog\missing-index.json`，七天内再点都直接跳过这一步，秒进匹配；七天之后再点才会重新读一次。中途取消不会留下坏文件，只是下次需要从头读。
 - **游戏版本自动识别**：游戏根目录里有 `KoikatsuSunshine.exe` 或 `KoikatsuSunshine_Data` 就按 KKS 查，有 `Koikatsu.exe` 或 `Koikatsu_Data` 就按 KK 查。判不出来时按 KK 处理，报告里会写明按哪个版本查找。
 - 选包只看包内 `manifest.xml` 的 GUID 和版本：要 KK 就跳过 Sunshine 版，要 KKS 就跳过 Koikatsu 版；没写 `<game>` 的老包（占多数）两边都收，但同一 GUID 有声明版本的包时优先用声明的那个。
 - 下载后按包所在目录放进 `mods` 下对应子目录（`ForCharactersLoading`、`ForStudioScenesLoading`、`KK_-ExtraMaps`），与手动安装的位置一致。
