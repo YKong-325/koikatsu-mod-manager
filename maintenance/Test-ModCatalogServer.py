@@ -26,6 +26,12 @@ def main():
         "manager", Path(__file__).resolve().parent.parent / "ModCatalogServer.py")
     manager = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(manager)
+    # The download line has to make sense on its own: "3/16 MB" left it open
+    # which number was the total, so each side carries its unit now.
+    assert manager.download_progress("x", 3 * 1048576, 16 * 1048576) == \
+        "正在下载 x · 3.0 / 16 MB（18%）"
+    assert manager.download_progress("x", 1048576, 0) == "正在下载 x · 已下载 1.0 MB"
+    assert manager.download_progress("x", 20 * 1048576, 16 * 1048576).endswith("（100%）")
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
         mods = root / "mods"

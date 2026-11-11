@@ -95,6 +95,21 @@ def confined(root, relative):
     return resolved
 
 
+def download_progress(name, received, total):
+    """What is left to download, in the units a reader can check.
+
+    The old line printed ``3/16 MB``: two bare numbers sharing one unit, so it
+    read as "3 of 16 megabytes" only if you already knew which side was which,
+    and it sat next to the package counter in the button ("下载 3/42"). Say the
+    unit twice and add the percentage; without a Content-Length, say only what
+    has arrived instead of inventing a denominator."""
+    arrived = received / 1048576
+    if total and total > 0:
+        percent = min(100, int(received * 100 / total))
+        return f"正在下载 {name} · {arrived:.1f} / {total / 1048576:.0f} MB（{percent}%）"
+    return f"正在下载 {name} · 已下载 {arrived:.1f} MB"
+
+
 class CatalogHandler(SimpleHTTPRequestHandler):
     server_version = "KoikatsuModCatalog/3.0"
     # Packages drawn between two index writes while rendering. Writing the index
@@ -674,8 +689,7 @@ class CatalogHandler(SimpleHTTPRequestHandler):
                     recovery.download(
                         row, destination, cancel=cancelled,
                         progress=lambda received, total, name=label: job.update(
-                            message=f"正在下载 {name} · "
-                                    f"{received // 1048576}/{max(total, received) // 1048576} MB"))
+                            message=download_progress(name, received, total)))
                     record = builder.scan_one(destination, server.mods, server.catalog)
                     installed.append(record)
                     job["updates"].append({
