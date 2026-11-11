@@ -189,6 +189,13 @@
     for (const problem of job.problems || []) {
       children.push(el('span', problem, 'notice'));
     }
+    /* A pack folder that failed to list looks exactly like "the pack does not
+     * ship it", which is the one wrong conclusion this page must not invite. */
+    if ((job.unreadPacks || []).length) {
+      children.push(el('span',
+        `有 ${job.unreadPacks.length} 个整合包目录这次没读到（${job.unreadPacks.join('、')}），`
+        + '所以上面“公共索引里没有”的结论可能不准，换个时间再试一次。', 'notice'));
+    }
     if (rejected.length) {
       const details = el('details');
       details.append(el('summary', `查看没找到的 ${rejected.length.toLocaleString()} 个`));

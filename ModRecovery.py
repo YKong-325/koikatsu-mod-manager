@@ -39,29 +39,28 @@ HEADERS = {"User-Agent": "KoikatsuModManager/4.0 (+local mod manager)"}
 BROWSER_HEADERS = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                   "AppleWebKit/537.36 (KHTML, like Gecko) "
                                   "Chrome/124.0.0.0 Safari/537.36")}
+# Every pack the index serves for Koikatsu and Sunshine. Both games read the
+# same `mods` folder, and most packages work in either, so one index covers
+# both: splitting it by game meant a Sunshine user could not even see the
+# Koikatsu folders, and that reads as "almost nothing can be downloaded".
+# EmotionCreators packs (`EC_*`, `Exclusive EC`) are a different game's content
+# and stay out.
 PACKS = (
     "Sideloader Modpack",
     "Sideloader Modpack - Studio",
+    "Sideloader Modpack - Animations",
     "Sideloader Modpack - Exclusive KK",
-    "Sideloader Modpack - Exclusive KK KKS",
-    "Sideloader Modpack - Maps",
-    "Sideloader Modpack - Fixes",
-    "Sideloader Modpack - Bleeding Edge",
-)
-# Sunshine keeps its own exclusive packs beside the shared ones, so a KKS
-# install needs both lists or it downloads nothing from the three KKS_ folders.
-PACKS_KKS = (
-    "Sideloader Modpack",
-    "Sideloader Modpack - Studio",
     "Sideloader Modpack - Exclusive KKS",
     "Sideloader Modpack - Exclusive KK KKS",
+    "Sideloader Modpack - Maps",
     "Sideloader Modpack - KKS_Maps",
+    "Sideloader Modpack - KK_MaterialEditor",
     "Sideloader Modpack - KKS_MaterialEditor",
+    "Sideloader Modpack - KK_UncensorSelector",
     "Sideloader Modpack - KKS_UncensorSelector",
     "Sideloader Modpack - Fixes",
     "Sideloader Modpack - Bleeding Edge",
 )
-FLAVOURS = {"kk": PACKS, "kks": PACKS_KKS}
 # Manifest <game> values, split into the games they name. An empty field is the
 # common case (6370 of 7548 archives) and means "shipped before the field
 # existed", so it is accepted by both games -- rejecting it would leave a KKS
@@ -266,30 +265,42 @@ def missing_from(records, cards):
     return sorted(rows.values(), key=lambda row: (-len(row["cards"]), row["guid"]))
 
 
-def game_flavour(root=None):
-    """Which game this install is: "kk" or "kks".
+def flavour_evidence(root=None):
+    """Which game this install is, plus what the answer rests on.
 
     Read from the markers the game folder ships, one level deep so a manager
-    pointed at a parent folder still resolves. Ambiguous or bare folders fall
-    back to "kk", which is what every catalogue built before this existed
-    assumed -- the caller prints the answer, so a wrong guess is visible
-    instead of silent.
+    pointed at a parent folder still resolves -- but a marker in the folder
+    itself outranks one found in a subfolder, because that is the folder the
+    user actually chose. Both markers present means the folder holds both
+    games; the answer falls back to "kk" and `ambiguous` says so, which is the
+    only case where a wrong guess can still happen.
     """
-    found = set()
+    best = {}
     if root:
         places = [Path(root)]
         try:
             places += [child for child in Path(root).iterdir() if child.is_dir()]
         except OSError:
             pass
-        for place in places:
+        for depth, place in enumerate(places):
             for flavour, markers in MARKERS.items():
-                if any((place / marker).exists() for marker in markers):
-                    found.add(flavour)
-    return found.pop() if len(found) == 1 else "kk"
+                for marker in markers:
+                    if (place / marker).exists():
+                        if flavour not in best or depth < best[flavour][0]:
+                            best[flavour] = (depth, marker, str(place / marker))
+                        break
+    return {"flavour": next(iter(best)) if len(best) == 1 else "kk",
+            "found": {name: {"marker": hit[1], "depth": hit[0], "path": hit[2]}
+                      for name, hit in best.items()},
+            "ambiguous": len(best) > 1}
 
 
-def pack_roots(flavour="kk"):
+def game_flavour(root=None):
+    """"kk" or "kks" for the configured folder; see `flavour_evidence`."""
+    return flavour_evidence(root)["flavour"]
+
+
+def pack_roots():
     """The pack folders the index lists.
 
     Read once with the toolkit agent and, if that page turns out to carry no
@@ -297,7 +308,6 @@ def pack_roots(flavour="kk"):
     agent but serves browsers looks identical to "the pack is gone" here, and
     that difference decides whether the user can download anything at all.
     """
-    packs = FLAVOURS.get(flavour, PACKS)
     links, failure = [], None
     for headers in (None, BROWSER_HEADERS):
         try:
@@ -305,7 +315,7 @@ def pack_roots(flavour="kk"):
         except Exception as exc:
             failure = exc
             continue
-        roots = [url for url in links if filename(url.rstrip("/")) in packs]
+        roots = [url for url in links if filename(url.rstrip("/")) in PACKS]
         if roots:
             return roots
     if links:
@@ -314,28 +324,66 @@ def pack_roots(flavour="kk"):
     raise OSError("无法连接公共整合站 " + BASE + "：" + str(failure))
 
 
-def _cache_name(stem, flavour):
-    return stem + ("" if flavour == "kk" else "-" + flavour) + ".json"
+def _packs_seen(urls):
+    """Which packs a file list already proves it has read.
+
+    A cache written before the packs were merged records no pack names, so the
+    coverage is derived from the URLs instead. That keeps an existing index
+    usable and lets the next run fetch only what it has never listed.
+    """
+    seen = set()
+    for url in urls:
+        text = urllib.parse.unquote(url)
+        for name in PACKS:
+            if "/" + name + "/" in text:
+                seen.add(name)
+                break
+    return seen
 
 
-def crawl(catalog, progress=None, cancel=None, flavour="kk"):
-    """Every archive the public index lists, cached for a week."""
-    cache = Path(catalog) / _cache_name("missing-index", flavour)
+def crawl(catalog, progress=None, cancel=None, flavour="kk", report=None):
+    """Every archive the public index lists, cached for a week.
+
+    `flavour` no longer picks the folders: both games read the same `mods`
+    folder and the same packs, so there is one index. It is kept in the
+    signature because the caller knows the install and logs it.
+
+    The cache records which packs it has read, so a pack added later -- or a
+    list that grew when the two games' folders were merged -- costs only that
+    pack, not another pass over seven thousand archives.
+    """
+    cache = Path(catalog) / "missing-index.json"
     stored = _read(cache, {})
-    if stored.get("files") and time.time() - stored.get("fetchedAt", 0) < INDEX_TTL:
-        return stored["files"]
-    roots = pack_roots(flavour)
-    folders, files, visited = set(), set(), set()
-    unread = []
+    files = set(stored.get("files") or [])
+    if time.time() - stored.get("fetchedAt", 0) >= INDEX_TTL:
+        files, stored = set(), {}
+    read = set(stored.get("packs") or []) or _packs_seen(files)
+    todo = [name for name in PACKS if name not in read]
+    if not todo:
+        if report is not None:
+            report.update({"packs": sorted(read), "unreadPacks": []})
+        return sorted(files)
+    roots = [url for url in pack_roots()
+             if filename(url.rstrip("/")) in todo]
+    if not roots:
+        # The listings lost a folder the cache already covers; keep what runs
+        # rather than throwing away a week of work over one renamed directory.
+        if files:
+            return sorted(files)
+        raise OSError("公共整合站没有列出任何整合包目录（" + probe(BASE) + "）")
+    folders, visited, unread = set(), set(), []
     for root in roots:
         # One unreadable pack folder must not cost the other six: a single
         # renamed directory used to abort the whole crawl before anything was
         # cached, so every retry died the same way.
+        name = filename(root.rstrip("/"))
         try:
             for url in listing(root):
                 (folders if url.endswith("/") else files).add(url)
         except Exception as exc:
-            unread.append(f"{filename(root.rstrip('/'))}（{exc}）")
+            unread.append(f"{name}（{exc}）")
+        else:
+            read.add(name)
         if progress:
             progress(f"公共索引：{len(files)} 个归档")
     if not files and unread:
@@ -358,7 +406,10 @@ def crawl(catalog, progress=None, cancel=None, flavour="kk"):
             progress(f"公共索引：{len(visited)} 个作者目录，{len(files)} 个归档")
     files = sorted(url for url in files
                    if "/Sideloader Modpack" in urllib.parse.unquote(url))
-    _write(cache, {"fetchedAt": time.time(), "files": files})
+    _write(cache, {"fetchedAt": time.time(), "packs": sorted(read),
+                   "files": files})
+    if report is not None:
+        report.update({"packs": sorted(read), "unreadPacks": unread})
     return files
 
 
@@ -415,13 +466,18 @@ def resolve(wanted, files, catalog, progress=None, cancel=None, report=None,
     is filled with the counts, the builds that only exist for the other game,
     and the archives that failed, so the caller can say which happened.
     """
-    cache = Path(catalog) / _cache_name("missing-manifests", flavour)
+    cache = Path(catalog) / "missing-manifests.json"
     stored = _read(cache, {})
+    rows = dict(stored.get("rows") or {})
+    # A cache written before the two games' indexes were merged lives under a
+    # suffix; fold it in instead of paying for those manifests again.
+    for legacy in ("missing-manifests-kks.json", "missing-manifests-kk.json"):
+        for url, row in (_read(Path(catalog) / legacy, {}).get("rows") or {}).items():
+            rows.setdefault(url, row)
     # A read that failed is not an answer: keeping it would hide that archive
     # from every later run, and a timeout is exactly the kind of thing that
     # works on the second try.
-    scanned = {url: row for url, row in stored.get("rows", {}).items()
-               if "error" not in row}
+    scanned = {url: row for url, row in rows.items() if "error" not in row}
     for old in [url for url in scanned if url not in files]:
         scanned.pop(old, None)
     pending = [url for url in files if url not in scanned]

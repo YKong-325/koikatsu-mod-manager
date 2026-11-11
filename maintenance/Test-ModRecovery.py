@@ -156,23 +156,23 @@ def main():
         # is still usable, but a declared Sunshine build wins even over a newer
         # undeclared one.
         extra = base + "Sun/%5BSun%5D%20Skirt%20v2.zipmod"
-        kks_files = files + [extra]
-        kks_cache = {
-            files[0]: dict(cache[files[0]]),
-            files[1]: dict(cache[files[1]]),
-            files[2]: {"guid": "Old.Both", "name": "Old", "game": "",
-                       "version": "1.0", "url": files[2]},
-            extra: {"guid": "Sun.Skirt", "name": "Skirt", "game": "",
-                    "version": "2.0", "url": extra},
-        }
-        Path(folder, "missing-manifests-kks.json").write_text(
+        old_url = base + "Both/%5BOld%5D%20Old.zipmod"
+        kks_files = files + [extra, old_url]
+        # One index now serves both games, so the rows are added to the same
+        # cache instead of a per-game file.
+        kks_cache = dict(cache)
+        kks_cache[old_url] = {"guid": "Old.Both", "name": "Old", "game": "",
+                              "version": "1.0", "url": old_url}
+        kks_cache[extra] = {"guid": "Sun.Skirt", "name": "Skirt", "game": "",
+                            "version": "2.0", "url": extra}
+        Path(folder, "missing-manifests.json").write_text(
             json.dumps({"fetchedAt": 0, "rows": kks_cache}), "utf-8")
         kks_coverage = {}
         kks = recovery.resolve(
             [{"guid": "Maker.Hat"}, {"guid": "Sun.Skirt"}, {"guid": "Old.Both"}],
             kks_files, folder, report=kks_coverage, flavour="kks")
         assert kks["sun.skirt"]["url"] == files[1], kks
-        assert kks["old.both"]["url"] == files[2], kks
+        assert kks["old.both"]["url"] == old_url, kks
         assert kks["maker.hat"]["url"] == files[0], kks
         assert {row["guid"]: row["reason"] for row in kks_coverage["fallbacks"]} == {
             "Maker.Hat": "kk"}, kks_coverage
@@ -184,22 +184,25 @@ def main():
         both_cache = {both_url: {"guid": "Both.Hat", "name": "Hat",
                                  "game": "Koikatsu, Koikatsu Sunshine",
                                  "version": "1.0", "url": both_url}}
+        Path(folder, "missing-manifests.json").write_text(
+            json.dumps({"fetchedAt": 0, "rows": both_cache}), "utf-8")
         for flavour in ("kk", "kks"):
-            Path(folder, f"missing-manifests{'' if flavour == 'kk' else '-' + flavour}.json"
-                 ).write_text(json.dumps(
-                     {"fetchedAt": 0, "rows": both_cache}), "utf-8")
             seen = {}
             picked = recovery.resolve([{"guid": "Both.Hat"}], [both_url], folder,
                                       report=seen, flavour=flavour)
             assert picked["both.hat"]["url"] == both_url, (flavour, picked)
             assert not seen["fallbacks"], (flavour, seen)
 
-    # What the folder ships decides which build is the right one. Ambiguity and
-    # an empty folder fall back to KK, which is what every older index assumed.
+    # What the folder ships decides which build is preferred. A marker in the
+    # folder itself outranks one in a subfolder; both present is the only case
+    # that can still be read wrong, and the evidence says so.
     with tempfile.TemporaryDirectory() as game:
         assert recovery.game_flavour(game) == "kk"
         Path(game, "Koikatsu.exe").write_text("", "utf-8")
         assert recovery.game_flavour(game) == "kk"
+        evidence = recovery.flavour_evidence(game)
+        assert evidence["flavour"] == "kk" and not evidence["ambiguous"], evidence
+        assert evidence["found"]["kk"]["marker"] == "Koikatsu.exe", evidence
     with tempfile.TemporaryDirectory() as game:
         Path(game, "KoikatsuSunshine.exe").write_text("", "utf-8")
         assert recovery.game_flavour(game) == "kks"
@@ -208,6 +211,44 @@ def main():
             Path(parent, "KoikatsuSunshine").mkdir()
             Path(parent, "KoikatsuSunshine", "KoikatsuSunshine.exe").write_text("", "utf-8")
             assert recovery.game_flavour(parent) == "kks"
+            assert recovery.flavour_evidence(parent)["found"]["kks"]["depth"] == 1
+            # The game's own folder wins over a sibling that happens to be there.
+            Path(parent, "Koikatsu.exe").write_text("", "utf-8")
+            mixed = recovery.flavour_evidence(parent)
+            assert mixed["ambiguous"] and mixed["flavour"] == "kk", mixed
+
+    # The index cache records which pack folders it has read, so a pack that
+    # turns up later -- or a folder that used to live in the other game's list
+    # -- costs only that folder, not another pass over the whole station.
+    import time
+    import urllib.parse
+    with tempfile.TemporaryDirectory() as folder:
+        names = ["Sideloader Modpack", "Sideloader Modpack - Exclusive KKS"]
+        roots = [recovery.BASE + urllib.parse.quote(name) + "/" for name in names]
+        seen = []
+        original_roots, original_listing = recovery.pack_roots, recovery.listing
+        recovery.pack_roots = lambda: roots
+
+        def fake_listing(url, headers=None):
+            seen.append(url)
+            return [url + "Author/pkg.zipmod"]
+
+        recovery.listing = fake_listing
+        try:
+            Path(folder, "missing-index.json").write_text(json.dumps({
+                "fetchedAt": time.time(),
+                "packs": [names[0]],
+                "files": [roots[0] + "Author/old.zipmod"]}), "utf-8")
+            report = {}
+            listed = recovery.crawl(folder, report=report)
+            assert seen == [roots[1]], seen
+            assert len(listed) == 2 and any("Exclusive" in url for url in listed), listed
+            assert report["packs"] == names and not report["unreadPacks"], report
+            seen.clear()
+            recovery.crawl(folder, report=report)
+            assert not seen, "a seven-day-old index with every pack read must not be re-crawled"
+        finally:
+            recovery.pack_roots, recovery.listing = original_roots, original_listing
 
     print("PASS: missing GUID grouping, install target layout, path and host "
           "refusal, manifest parsing, what a scan did not answer, retrying the "

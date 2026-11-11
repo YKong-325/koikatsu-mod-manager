@@ -67,7 +67,7 @@ def missing_snapshot(server, cursor=0):
         return {"running": False, "stage": "", "message": "", "total": 0, "done": 0,
                 "failed": 0, "matched": 0, "current": "", "updates": [], "cursor": 0,
                 "error": "", "problems": [], "scanned": 0, "unreadable": 0,
-                "fallbacks": [], "flavour": ""}
+                "fallbacks": [], "packs": [], "unreadPacks": [], "flavour": ""}
     updates = job["updates"]
     cursor = max(0, min(cursor, len(updates)))
     return {"running": job["running"], "stage": job["stage"], "message": job["message"],
@@ -80,6 +80,8 @@ def missing_snapshot(server, cursor=0):
             "scanned": job.get("scanned", 0),
             "unreadable": job.get("unreadable", 0),
             "fallbacks": job.get("fallbacks", [])[:200],
+            "packs": job.get("packs", []),
+            "unreadPacks": job.get("unreadPacks", []),
             "flavour": job.get("flavour", "")}
 
 
@@ -538,7 +540,8 @@ class CatalogHandler(SimpleHTTPRequestHandler):
                "requested": len(rows), "total": len(rows), "done": 0, "failed": 0,
                "matched": 0, "current": "", "cancel": False, "updates": [],
                "error": "", "problems": [], "unmatched": [], "flavour": flavour,
-               "scanned": 0, "unreadable": 0, "fallbacks": []}
+               "scanned": 0, "unreadable": 0, "fallbacks": [],
+               "packs": [], "unreadPacks": []}
         self.server.fetch_job = job
         threading.Thread(target=self._fetch_worker, args=(job, rows, flavour),
                          daemon=True).start()
@@ -547,19 +550,28 @@ class CatalogHandler(SimpleHTTPRequestHandler):
     def _game_flavour(self):
         """Whether the configured folder is Koikatsu or Sunshine, once.
 
-        The two games ship the same GUIDs in different builds, so this is what
-        decides which copy may be downloaded. Resolved from the folder itself
-        rather than asked, because a user should not have to know.
+        The two games ship the same GUIDs in different builds, so this only
+        decides which copy is preferred. It used to decide which index was
+        crawled as well, and a wrong answer there looked like "the download
+        finds nothing"; now the evidence is logged so a report carries it.
         """
         cached = getattr(self.server, "game_flavour", None)
         if cached:
             return cached
+        evidence = {}
         try:
-            flavour = self._recovery().game_flavour(
+            evidence = self._recovery().flavour_evidence(
                 (getattr(self.server, "settings", None) or {}).get("game"))
+            flavour = evidence.get("flavour") or "kk"
         except Exception:
             flavour = "kk"
         self.server.game_flavour = flavour
+        found = evidence.get("found") or {}
+        detail = "；".join(f"{name} 依据 {hit['path']}" for name, hit in found.items())
+        print(f"[missing-mods] 目标游戏 {flavour.upper()}："
+              f"{detail or '没有找到游戏标记，按 KK 处理'}"
+              + ("（两个游戏的标记都在，按 KK 处理）" if evidence.get("ambiguous") else ""),
+              flush=True)
         return flavour
 
     def _cancel_fetch(self):
@@ -603,9 +615,18 @@ class CatalogHandler(SimpleHTTPRequestHandler):
 
         try:
             say("正在读取公共索引…", "索引")
+            crawl_report = {}
             files = recovery.crawl(server.catalog, progress=say, cancel=cancelled,
-                                   flavour=flavour)
-            say(f"索引里共 {len(files)} 个归档，开始读取包内清单", "匹配")
+                                   flavour=flavour, report=crawl_report)
+            # Which packs the index actually covers is the difference between
+            # "this mod is not public" and "one pack folder failed to list",
+            # and the second one used to be invisible.
+            job["packs"] = crawl_report.get("packs") or []
+            job["unreadPacks"] = crawl_report.get("unreadPacks") or []
+            if job["unreadPacks"]:
+                trace("整合包目录读取失败：" + "；".join(job["unreadPacks"]))
+            say(f"索引里共 {len(files)} 个归档（{len(job['packs'])} 个整合包），"
+                "开始读取包内清单", "匹配")
             coverage = {}
             found = recovery.resolve(rows, files, server.catalog,
                                      progress=say, cancel=cancelled,

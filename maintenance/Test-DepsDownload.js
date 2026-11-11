@@ -93,6 +93,15 @@ async function main() {
   assert.doesNotMatch(mixed, /核对了|读不出来/,
     'the scan coverage is no longer spelled out under the answer');
 
+  /* A pack folder that failed to list must not leave "not in the index"
+   * standing as a fact: that is the one conclusion this page can get wrong. */
+  job = {...job, unreadPacks: ['Sideloader Modpack - Exclusive KKS']};
+  await download.onclick();
+  assert.match($('dependencyReport').textContent, /没读到/,
+    'an unread pack folder is called out');
+  assert.match($('dependencyReport').textContent, /结论可能不准/,
+    'and the answer above it is marked as provisional');
+
   /* Starting the next round clears the previous answer instead of stacking. */
   job = {running: true, stage: '索引', message: '正在读取公共索引…', requested: 1,
     total: 1, done: 0, failed: 0, matched: 0, cursor: 0, updates: [], error: '',

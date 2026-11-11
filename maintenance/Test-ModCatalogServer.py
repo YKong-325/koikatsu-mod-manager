@@ -476,7 +476,9 @@ def main():
                     return "kk"
 
                 @staticmethod
-                def crawl(catalog, progress=None, cancel=None, flavour="kk"):
+                def crawl(catalog, progress=None, cancel=None, flavour="kk", report=None):
+                    if report is not None:
+                        report.update({"packs": ["Sideloader Modpack"], "unreadPacks": []})
                     return ["https://sideload.betterrepack.com/download/KKEC/pack/a.zipmod"]
 
                 @staticmethod
