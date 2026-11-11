@@ -316,14 +316,17 @@ def main():
             # The card coverage and the matching note live in the header, not in
             # the download answer.
             assert "依赖已识别" in report and "本体物品清单" in report
-            # "Which packages no card refers to" is housekeeping, not a broken
-            # card: both the dependency view's second mode and the Mod grid's
-            # card-reference facet were dropped, so neither string ships.
+            # "Which packages no card refers to" belongs to the Mod grid, where a
+            # package is actually disabled. The dependency view answers only
+            # "which card is missing what", so its second mode is gone while the
+            # card-reference facet still ships.
             assert "哪些 Mod 没被引用" not in report
-            assert "unknownMods()" not in report and "unknownReferences()" not in report
-            assert 'id: \'usage\'' not in report
-            # The collision facet is the only plugin question left, and it is
-            # still offered dynamically.
+            assert "unknownMods()" not in report
+            assert "function modRow" not in report
+            assert "id: 'usage'" in report and "卡片引用" in report
+            assert "unknownReferences()" in report
+            # The collision facet sits next to it, and is still offered
+            # dynamically -- an option nothing can be in is not drawn.
             assert "id: 'conflict'" in report
             # The render control is the one red bulk action on the grid.
             assert b"bulk-render" in get("/view-mods.js")

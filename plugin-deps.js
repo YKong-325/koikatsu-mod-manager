@@ -5,10 +5,10 @@
  * leaving it cannot disturb where the user was.
  *
  * One question only: which cards still miss packages, and how to fetch them.
- * The other question this view used to answer -- which installed packages no
- * card refers to -- belongs to housekeeping, not to a broken card, and reading
- * a 7 000-row package list to find it made the page slower and noisier than
- * the job it was opened for.
+ * The other question this plugin answers -- which installed packages no card
+ * refers to -- belongs to housekeeping rather than to a broken card, so it is
+ * a facet on the Mod grid where packages are actually disabled, not a second
+ * list here.
  *
  * This is also the only place that needs the card records themselves, so they
  * are fetched on first use instead of being shipped with every page load.
@@ -553,6 +553,66 @@
     }
   });
 
+  /* The Mod grid answers a question the dependency view no longer asks: not
+   * "which card is missing what" but "does anything reference this package at
+   * all". That is housekeeping, and the grid is where a package is actually
+   * disabled, so the question lives there and only there. A package is safe to
+   * drop only when no character card, no outfit card and no scene names it, so
+   * the facet counts all three. */
+  const KINDS = ['角色卡', '服装卡', '场景'];
+
+  function references(verdict) {
+    const cards = (verdict.cards || []).length;
+    const outfits = (verdict.outfits || []).length;
+    const scenes = (verdict.scenes || []).length;
+    return {cards, outfits, scenes, total: cards + outfits + scenes};
+  }
+
+  function libraryHasCards() {
+    const raw = KK.deps.raw;
+    if (!raw) return false;
+    if (raw.coverageByKind) {
+      return KINDS.some(kind => {
+        const value = raw.coverageByKind[kind];
+        return Boolean(value && value.parsed);
+      });
+    }
+    return Boolean(raw.coverage && raw.coverage.parsed);
+  }
+
+  function cardState(record) {
+    const verdict = KK.deps.mod(record.path);
+    if (!verdict) return 'unknown';
+    if (references(verdict).total) return 'matched';
+    // No GUID, or nothing parsed in the library, means no reference is merely
+    // an absence of evidence rather than evidence of absence.
+    return record.guid && libraryHasCards() ? 'unmatched' : 'unknown';
+  }
+
+  /* "Cannot tell" is a real verdict -- a package without a GUID, or one the
+   * index has not covered yet -- but on a healthy catalog nothing lands in it,
+   * and an option that can only ever return nothing is noise in the dropdown.
+   * It therefore appears only while something is actually in that state. */
+  function unknownReferences() {
+    let total = 0;
+    for (const record of data.catalog) {
+      if (cardState(record) === 'unknown') total += 1;
+    }
+    return total;
+  }
+
+  KK.registerModFacet({
+    id: 'usage',
+    label: '卡片引用',
+    options() {
+      const choices = [['', '全部引用状态'], ['unmatched', '未被任何卡片引用'],
+        ['matched', '已被卡片引用']];
+      if (unknownReferences()) choices.push(['unknown', '无法判断']);
+      return choices;
+    },
+    match(record, value) { return cardState(record) === value; }
+  });
+
   KK.onModCard((record, card, meta) => {
     const verdict = KK.deps.mod(record.path);
     /* A GUID collision is a fact about the package, not about any filter, and
@@ -562,5 +622,24 @@
     if (sharesGuid(record).length || (verdict && verdict.duplicateGuid)) {
       meta.prepend(conflictBanner(record));
     }
+    /* The reference count is only worth the pixels while the filter is asking
+     * about references; on the default view it is a line of text above a cover
+     * nobody has to read to use the grid. */
+    if (!KK.facetValue('usage')) return;
+    if (!verdict) return;
+    const state = cardState(record);
+    const refs = references(verdict);
+    const label = {
+      unmatched: '未被任何卡片引用',
+      matched: `被 ${refs.total} 张卡片引用`,
+      unknown: record.guid ? '资源卡索引不足，无法判断' : '包内未声明 GUID，无法判断'
+    }[state];
+    if (label) {
+      meta.append(el('div', label, 'detection-label ' +
+        (state === 'matched' ? 'installed' : 'duplicate')));
+    }
+    const breakdown = [['角色卡', refs.cards], ['服装卡', refs.outfits], ['场景', refs.scenes]]
+      .filter(([, count]) => count).map(([kind, count]) => `${kind} ${count}`);
+    if (breakdown.length) meta.append(el('div', breakdown.join(' · '), 'notice'));
   });
 })();

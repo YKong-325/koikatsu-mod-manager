@@ -34,10 +34,6 @@ const app = createApp({catalog, library: Fixture.library,
 const KK = app.load(SCRIPTS);
 const $ = id => app.byId.get(id);
 const cardFor = path => $('grid').children.find(card => card.dataset.path === path);
-const rowFor = path => $('dependencyList').children.find(row => {
-  const shown = row.querySelector('.path');
-  return shown && shown.textContent === path;
-});
 
 KK.openView('mods');
 

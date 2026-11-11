@@ -22,8 +22,8 @@ assert.equal(KK.data.catalog.length, 41);
 const tabs = $('tabs').children.filter(node => node.tagName === 'BUTTON');
 assert.equal(tabs.length, 3, 'one tab per registered view');
 assert.deepEqual(tabs.map(tab => tab.textContent), ['Mod', '已删除', '依赖检查']);
-assert.equal(KK.facets.length, 1,
-  'the only plugin question left is the GUID collision one');
+assert.equal(KK.facets.length, 2,
+  'the plugin answers two questions on the Mod grid: card references and collisions');
 
 /* --- Mod grid ----------------------------------------------------------- */
 
@@ -34,12 +34,13 @@ assert.match($('status').textContent, /41 个包/);
 // rather than in the gap between the header and the sticky bar.
 assert.equal($('status').parentElement.tagName, 'HEADER',
   'the result line belongs to the search area');
+const facetSelect = $('modPluginFacets').querySelector('[data-facet="usage"]');
+assert.ok(facetSelect, 'the card-reference facet is rendered into the Mod toolbar');
+assert.equal(facetSelect.children.length, 4,
+  'pack040 has no GUID, so "cannot tell" applies');
 /* No two packs in this fixture share a GUID, so the collision facet has no
- * options to offer and must not put an empty dropdown in the toolbar. It is
- * also the only plugin facet left: "which packages no card refers to" was
- * dropped -- housekeeping, not a broken card, and the dependency view had a
- * second, slower copy of the same question. */
-assert.equal($('modPluginFacets').children.length, 0,
+ * options to offer and must not put an empty dropdown in the toolbar. */
+assert.equal($('modPluginFacets').children.length, 1,
   'a facet with nothing to offer is not rendered at all');
 
 /* The bars that act on a long list stick to the top of the window while it
@@ -72,6 +73,30 @@ assert.ok(firstCard.querySelector('.delete'), 'disable button is present');
 const plain = $('grid').children.find(card => card.textContent.includes('pack000.zipmod'));
 assert.ok(!plain.querySelector('.images'), 'a pack without its own image keeps the placeholder');
 assert.match(plain.textContent, /未声明缩略图/, 'the placeholder says why it is empty');
+
+/* A facet value must actually filter the grid, and "referenced" must mean any
+ * kind of card: a scene or an outfit is as much a reason to keep a package as a
+ * character card is. */
+const listedNames = () => $('grid').children.map(card => {
+  const name = card.querySelector('.name');
+  return name ? name.textContent : '';
+});
+
+facetSelect.value = 'unmatched';
+facetSelect.onchange();
+assert.equal($('grid').children.length, 36, 'unmatched page is still full');
+const orphanNames = listedNames();
+assert.ok(!orphanNames.includes('Pack 0'), 'a pack used by a character card stays hidden');
+assert.ok(!orphanNames.includes('Pack 3'), 'a pack used by a scene stays hidden');
+assert.ok(!orphanNames.includes('Pack 4'), 'a pack used by an outfit card stays hidden');
+
+facetSelect.value = 'matched';
+facetSelect.onchange();
+assert.deepEqual(listedNames().sort(), ['Pack 0', 'Pack 3', 'Pack 4'],
+  'character cards, outfit cards and scenes all count as a reference');
+facetSelect.value = '';
+facetSelect.onchange();
+assert.equal($('grid').children.length, 36, 'clearing the facet restores the full list');
 
 /* --- Dependency view ---------------------------------------------------- */
 
