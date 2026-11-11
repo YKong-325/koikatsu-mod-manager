@@ -233,6 +233,11 @@
       select.dataset.facet = facet.id;
       select.setAttribute('aria-label', facet.label);
       const options = typeof facet.options === 'function' ? facet.options() : facet.options;
+      // A facet with nothing to offer right now stays out of the toolbar.
+      // "Only show this when it applies" is different from "always show an
+      // option that can return nothing", and an empty select is worse than
+      // both: it is a control the user can open and find no answers in.
+      if (!options.length) continue;
       for (const [value, label] of options) {
         const option = el('option', label);
         option.value = value;
@@ -257,7 +262,10 @@
     renderModFacets(facetHost.container, facetHost.onChange);
     const lost = before.some(([id, value]) => {
       const select = facetSelects.get(id);
-      return select && select.value !== value;
+      // A facet that stopped offering options takes its select away with it,
+      // and with it the subset it was holding back: refilter in that case too.
+      if (!select) return value !== '';
+      return select.value !== value;
     });
     // A selection that no longer exists has been reset to "all"; the grid still
     // shows the old subset, so it has to be refiltered once.

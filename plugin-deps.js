@@ -348,6 +348,80 @@
     scope.hidden = state.mode !== 'cards';
   }
 
+  /* Two packages can carry the same GUID. Sideloader then loads only one of
+   * them, silently; which one it keeps is its own rule (highest version, then
+   * longest path), so the manager cannot promise that the copy the user is
+   * looking at is the copy in effect. What it can do is say the collision
+   * exists before the user wonders why a mod does nothing.
+   *
+   * The catalog is the authority here rather than deps.json: deps carries only
+   * a boolean per package, and a banner is more useful when it can say how many
+   * packs share the GUID. Walking 7 000 records once beats rescanning them for
+   * every card on every page.
+   */
+  let guidGroups = null;
+  function byGuid() {
+    if (guidGroups) return guidGroups;
+    guidGroups = new Map();
+    for (const record of data.catalog) {
+      const guid = (record.guid || '').trim().toLowerCase();
+      if (!guid) continue;
+      const rows = guidGroups.get(guid);
+      if (rows) rows.push(record);
+      else guidGroups.set(guid, [record]);
+    }
+    return guidGroups;
+  }
+
+  function sharesGuid(record) {
+    const guid = (record.guid || '').trim().toLowerCase();
+    if (!guid) return [];
+    return (byGuid().get(guid) || []).filter(other => other.path !== record.path);
+  }
+
+  function guidClashes() {
+    let groups = 0, packs = 0;
+    for (const rows of byGuid().values()) {
+      if (rows.length < 2) continue;
+      groups += 1;
+      packs += rows.length;
+    }
+    return {groups, packs};
+  }
+
+  function conflictBanner(record) {
+    const peers = sharesGuid(record);
+    const others = peers.length === 1 ? '另有 1 个包使用同一 GUID'
+      : peers.length ? `另有 ${peers.length} 个包使用同一 GUID`
+        : '与其他包使用了同一 GUID';
+    const banner = el('div', `GUID 冲突：${others}，游戏只会加载其中一个`,
+      'conflict-flag');
+    const names = peers.map(other => other.file || other.path).filter(Boolean);
+    if (names.length) {
+      banner.title = `同一 GUID 的包：${names.join('、')}。` +
+        '游戏只会加载其中一个，其余被跳过；留下哪个由包内版本号决定，' +
+        '版本相同时按路径长度。停用多余的那个即可消除冲突。';
+    }
+    return banner;
+  }
+
+  /* A collision deserves a filter of its own: the banner explains, the dropdown
+   * finds. It only appears when the catalog actually holds one -- on a clean
+   * install it would be a control with a single, useless answer. */
+  KK.registerModFacet({
+    id: 'conflict',
+    label: 'GUID 冲突',
+    options() {
+      const {groups, packs} = guidClashes();
+      return groups ? [['', '全部包'], ['only', `只看冲突（${packs} 个包）`]] : [];
+    },
+    match(record, value) {
+      if (value !== 'only') return true;
+      const verdict = KK.deps.mod(record.path);
+      return Boolean((verdict && verdict.duplicateGuid) || sharesGuid(record).length);
+    }
+  });
+
   function numbers() {
     const deps = KK.deps.raw;
     if (!deps) {
@@ -361,6 +435,7 @@
       ];
     }
     const {summary: mods, coverage} = deps;
+    const clash = guidClashes();
     const cardsMode = state.mode === 'cards';
     // A tick on a card that has since been fixed points at nothing; drop it so
     // the count in the button always matches what will really be downloaded.
@@ -393,7 +468,9 @@
       el('strong', `角色相关 Mod ${mods.characterMods.toLocaleString()}`),
       el('span', `已匹配 ${mods.matched.toLocaleString()} · ` +
         `未匹配 ${mods.unmatched.toLocaleString()} · ` +
-        `无法判断 ${mods.unknown.toLocaleString()}`),
+        `无法判断 ${mods.unknown.toLocaleString()}` +
+        (clash.groups
+          ? ` · GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）` : '')),
       el('span', `角色卡 ${coverage.total.toLocaleString()} · ` +
         `依赖已识别 ${coverage.parsed.toLocaleString()} · ` +
         `未识别 ${coverage.unknown.toLocaleString()} · ` +
@@ -472,6 +549,13 @@
       el('div', record.path, 'path'),
       el('div', `${record.slots.join(' / ') || record.dataDirs.join(' / ') || '未分类'} · ` +
         `${(record.bytes / 1048576).toFixed(1)} MB`, 'count'));
+
+    // The dependency view lists the same packages and leads to the same
+    // question ("why is this one doing nothing"), so the banner belongs here
+    // too rather than only on the Mod grid.
+    if (sharesGuid(record).length || (verdict && verdict.duplicateGuid)) {
+      meta.prepend(conflictBanner(record));
+    }
 
     const stateLabel = {unmatched: '未被任何角色卡引用', matched: null,
       unknown: '无法判断引用状态', other: '非角色内容'}[verdict ? verdict.state : 'other'];
@@ -633,8 +717,16 @@
   });
 
   KK.onModCard((record, card, meta) => {
-    if (!KK.facetValue('usage')) return;
     const verdict = KK.deps.mod(record.path);
+    /* A GUID collision is a fact about the package, not about the current
+     * filter: it stays on the card whatever "卡片引用" says, and it goes above
+     * the package name so it cannot be read as a footnote to it. This used to
+     * hide behind the usage filter, which is why four colliding packages were
+     * invisible on the default view. */
+    if (sharesGuid(record).length || (verdict && verdict.duplicateGuid)) {
+      meta.prepend(conflictBanner(record));
+    }
+    if (!KK.facetValue('usage')) return;
     if (!verdict) return;
     const state = cardState(record);
     const refs = references(verdict);
@@ -650,8 +742,5 @@
     const breakdown = [['角色卡', refs.cards], ['服装卡', refs.outfits], ['场景', refs.scenes]]
       .filter(([, count]) => count).map(([kind, count]) => `${kind} ${count}`);
     if (breakdown.length) meta.append(el('div', breakdown.join(' · '), 'notice'));
-    if (verdict.duplicateGuid) {
-      meta.append(el('div', '相同 GUID 对应多个包，无法区分具体版本', 'notice'));
-    }
   });
 })();

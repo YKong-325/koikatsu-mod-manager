@@ -60,6 +60,13 @@ body.marquee-active{user-select:none;cursor:crosshair}
 .detection-summary{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 18px;padding:12px 0;border-top:1px solid #d8dde2;line-height:1.6}
 .detection-summary .notice{flex-basis:100%;margin:0}
 .detection-label{font-size:13px;font-weight:600;margin-top:10px;overflow-wrap:anywhere}
+/* A GUID collision is decided by the game, not by the manager, but both packs
+   stay installed: the card has to say so above the package name, where the
+   "why is this mod doing nothing" question starts. The title attribute names
+   the other packs, so the banner stays one readable line. */
+.conflict-flag{margin:0 0 10px;padding:5px 8px;font-size:12px;font-weight:600;
+  color:#8d1e32;background:#fdeef1;border-left:3px solid #c5304a;
+  border-radius:0 4px 4px 0;overflow-wrap:anywhere;cursor:help}
 .detection-download{align-self:center;margin-left:auto;min-height:32px;padding:4px 14px;
   font-size:13px;color:#fff;background:#c5304a;border:1px solid #a9243c;border-radius:4px}
 .detection-download:not(:disabled):hover{background:#a9243c;border-color:#8d1e32;color:#fff;

@@ -22,7 +22,8 @@ assert.equal(KK.data.catalog.length, 41);
 const tabs = $('tabs').children.filter(node => node.tagName === 'BUTTON');
 assert.equal(tabs.length, 3, 'one tab per registered view');
 assert.deepEqual(tabs.map(tab => tab.textContent), ['Mod', '已删除', '依赖检查']);
-assert.equal(KK.facets.length, 1, 'the dependency plugin registers one Mod facet');
+assert.equal(KK.facets.length, 2,
+  'the dependency plugin registers a facet per question it answers');
 
 /* --- Mod grid ----------------------------------------------------------- */
 
@@ -37,6 +38,10 @@ const facetSelect = $('modPluginFacets').querySelector('[data-facet="usage"]');
 assert.ok(facetSelect, 'plugin facet is rendered into the Mod toolbar');
 assert.equal(facetSelect.children.length, 4,
   'facet options come from the plugin; pack040 has no GUID, so "cannot tell" applies');
+/* No two packs in this fixture share a GUID, so the collision facet has no
+ * options to offer and must not put an empty dropdown in the toolbar. */
+assert.equal($('modPluginFacets').children.length, 1,
+  'only the facet that has something to offer is rendered');
 
 /* The bars that act on a long list stick to the top of the window while it
  * scrolls, which only works if they hang off #dock rather than a filter row
