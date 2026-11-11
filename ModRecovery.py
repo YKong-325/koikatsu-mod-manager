@@ -591,7 +591,8 @@ def download(row, destination, progress=None, cancel=None):
     partial = destination.with_name(destination.name + ".partial")
     try:
         with _request(row["url"], timeout=60) as response, partial.open("wb") as stream:
-            total = int(response.headers.get("Content-Length") or row.get("bytes") or 0)
+            declared = int(response.headers.get("Content-Length") or 0)
+            total = declared or int(row.get("bytes") or 0)
             received = 0
             while True:
                 if cancel and cancel():
@@ -603,8 +604,12 @@ def download(row, destination, progress=None, cancel=None):
                 received += len(block)
                 if progress:
                     progress(received, total)
-        if row.get("bytes") and partial.stat().st_size != row["bytes"]:
-            raise OSError("下载大小与索引不符")
+        # Trust this response's own length, not the index: some hosts answer a
+        # range probe with a stub, and the recorded size can be a few kilobytes
+        # for a package that is really hundreds of megabytes. The zip check
+        # below is what proves the payload, this only catches a cut-off transfer.
+        if declared and partial.stat().st_size != declared:
+            raise OSError("下载大小与服务器提供的不符")
         with zipfile.ZipFile(partial) as archive:
             found = manifest(archive)
             if found["guid"].casefold() != row["guid"].casefold():

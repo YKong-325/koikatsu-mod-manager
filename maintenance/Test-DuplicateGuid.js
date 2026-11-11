@@ -77,18 +77,6 @@ KK.openView('deps');
 assert.match($('dependencySummary').textContent, /GUID 冲突 1 组（2 个包）/,
   'the header says how many collisions the catalog holds');
 
-const mode = $('dependencyControls').children[0];
-mode.value = 'mods';
-mode.onchange();
-const filter = $('dependencyControls').children[2];
-filter.value = '';
-filter.onchange();
-
-const row = rowFor(mine.path);
-assert.ok(row, 'the colliding package is listed');
-assert.ok(row.querySelector('.conflict-flag'),
-  'the dependency list carries the same warning, not only the Mod grid');
-
-console.log('PASS: duplicate GUIDs are marked on both views without a filter, '
+console.log('PASS: duplicate GUIDs are marked on the Mod grid without a filter, '
   + 'name the package they collide with, can be filtered to, and are counted '
   + 'in the dependency header');

@@ -22,8 +22,8 @@ assert.equal(KK.data.catalog.length, 41);
 const tabs = $('tabs').children.filter(node => node.tagName === 'BUTTON');
 assert.equal(tabs.length, 3, 'one tab per registered view');
 assert.deepEqual(tabs.map(tab => tab.textContent), ['Mod', '已删除', '依赖检查']);
-assert.equal(KK.facets.length, 2,
-  'the dependency plugin registers a facet per question it answers');
+assert.equal(KK.facets.length, 1,
+  'the only plugin question left is the GUID collision one');
 
 /* --- Mod grid ----------------------------------------------------------- */
 
@@ -34,14 +34,13 @@ assert.match($('status').textContent, /41 个包/);
 // rather than in the gap between the header and the sticky bar.
 assert.equal($('status').parentElement.tagName, 'HEADER',
   'the result line belongs to the search area');
-const facetSelect = $('modPluginFacets').querySelector('[data-facet="usage"]');
-assert.ok(facetSelect, 'plugin facet is rendered into the Mod toolbar');
-assert.equal(facetSelect.children.length, 4,
-  'facet options come from the plugin; pack040 has no GUID, so "cannot tell" applies');
 /* No two packs in this fixture share a GUID, so the collision facet has no
- * options to offer and must not put an empty dropdown in the toolbar. */
-assert.equal($('modPluginFacets').children.length, 1,
-  'only the facet that has something to offer is rendered');
+ * options to offer and must not put an empty dropdown in the toolbar. It is
+ * also the only plugin facet left: "which packages no card refers to" was
+ * dropped -- housekeeping, not a broken card, and the dependency view had a
+ * second, slower copy of the same question. */
+assert.equal($('modPluginFacets').children.length, 0,
+  'a facet with nothing to offer is not rendered at all');
 
 /* The bars that act on a long list stick to the top of the window while it
  * scrolls, which only works if they hang off #dock rather than a filter row
@@ -74,38 +73,17 @@ const plain = $('grid').children.find(card => card.textContent.includes('pack000
 assert.ok(!plain.querySelector('.images'), 'a pack without its own image keeps the placeholder');
 assert.match(plain.textContent, /未声明缩略图/, 'the placeholder says why it is empty');
 
-/* A facet value must actually filter the grid, and "referenced" must mean any
- * kind of card: a scene or an outfit is as much a reason to keep a package as a
- * character card is. */
-const listedNames = () => $('grid').children.map(card => {
-  const name = card.querySelector('.name');
-  return name ? name.textContent : '';
-});
-
-facetSelect.value = 'unmatched';
-facetSelect.onchange();
-assert.equal($('grid').children.length, 36, 'unmatched page is still full');
-const orphanNames = listedNames();
-assert.ok(!orphanNames.includes('Pack 0'), 'a pack used by a character card stays hidden');
-assert.ok(!orphanNames.includes('Pack 3'), 'a pack used by a scene stays hidden');
-assert.ok(!orphanNames.includes('Pack 4'), 'a pack used by an outfit card stays hidden');
-
-facetSelect.value = 'matched';
-facetSelect.onchange();
-assert.deepEqual(listedNames().sort(), ['Pack 0', 'Pack 3', 'Pack 4'],
-  'character cards, outfit cards and scenes all count as a reference');
-facetSelect.value = '';
-facetSelect.onchange();
-assert.equal($('grid').children.length, 36, 'clearing the facet restores the full list');
-
 /* --- Dependency view ---------------------------------------------------- */
 
 KK.openView('deps');
-assert.match($('dependencySummary').textContent, /角色相关 Mod 41/);
+assert.match($('dependencySummary').textContent, /角色卡 2/,
+  'the header opens with the card count');
 assert.match($('dependencySummary').textContent, /依赖已识别/,
-  'the header still carries the card coverage');
+  'and still carries the card coverage');
 assert.match($('dependencySummary').textContent, /本体物品清单/,
-  'and the note saying how a GUID is matched');
+  'plus the note saying how a GUID is matched');
+assert.equal($('dependencyControls').children.length, 3,
+  'type, state and search -- the "which mods are unused" switch is gone');
 const download = $('downloadMissing');
 assert.ok(download, 'the dependency view offers to fetch what is missing');
 assert.match(download.textContent, /下载缺失 Mod（1）/,
@@ -139,67 +117,31 @@ assert.match(download.textContent, /下载选中 1 张卡的 1 个 Mod/,
   'pick-all takes the whole current result');
 $('dependencyClearPick').onclick();
 
-$('dependencyControls').children[0].value = 'mods';
-$('dependencyControls').children[0].onchange();
-assert.equal($('dependencyList').children.length, 38, 'unmatched mods are listed');
-assert.ok($('dependencyControls').children[2].children
-  .some(option => option.value === 'unknown'),
-  'the "cannot tell" filter is there while the snapshot holds such a mod');
-
 /* --- Options that would only ever be empty ------------------------------- */
 
-console.log('PASS: shell boots every registered view, plugin facets filter the '
-  + 'Mod grid, cards are decorated through hooks, every missing-mod verdict '
+// A facet with no answer to give is not drawn, and the collision one appears
+// again the moment the catalog holds a second copy of a GUID.
+const twin = {...catalog[0], path: 'zz-pack-copy.zipmod'};
+const dupApp = createApp({catalog: [...catalog, twin], library, deps});
+const DUP = dupApp.load(SCRIPTS);
+DUP.openView('mods');
+const conflictSelect = () => dupApp.byId.get('modPluginFacets')
+  .querySelector('[data-facet="conflict"]');
+assert.ok(conflictSelect(), 'a collision puts the filter back in the toolbar');
+assert.equal(conflictSelect().children.length, 2, 'all packages, or only the colliding ones');
+conflictSelect().value = 'only';
+conflictSelect().onchange();
+assert.equal(dupApp.byId.get('grid').children.length, 2,
+  'and it narrows the grid to the pair');
+DUP.data.catalog.splice(DUP.data.catalog.length - 1, 1);
+DUP.refreshModFacets();
+assert.equal(conflictSelect(), null,
+  'removing the last collision takes the dropdown away with it');
+
+console.log('PASS: shell boots every registered view, the collision facet filters '
+  + 'the Mod grid, cards are decorated through hooks, every missing-mod verdict '
   + 'comes from the shared dependency data, and the batch bar docks above the '
   + 'scrolling grid');
-
-// The filter dropdown must not promise a state no record is in: "cannot tell"
-// only means something while a package has no GUID or the index has not caught
-// up. A catalog where every package resolves gets three options, not four.
-const healthy = catalog.map(record => ({...record, guid: record.guid || 'guid.40'}));
-const healthyDeps = {...deps, mods: {...deps.mods,
-  'pack002.zipmod': {...deps.mods['pack002.zipmod'], state: 'unmatched'},
-  'pack040.zipmod': {state: 'unmatched', cards: [], outfits: [], scenes: [],
-    duplicateGuid: false}}};
-const clean = createApp({catalog: healthy, library, deps: healthyDeps});
-const CLEAN = clean.load(SCRIPTS);
-CLEAN.openView('mods');
-const usageSelect = () => clean.byId.get('modPluginFacets')
-  .querySelector('[data-facet="usage"]');
-assert.equal(usageSelect().children.length, 3,
-  'every package resolves, so "cannot tell" is not on offer');
-assert.deepEqual(usageSelect().children.map(option => option.value),
-  ['', 'unmatched', 'matched'], 'only the states that exist are listed');
-
-// Rebuilding must keep a choice that still exists; it is only reset when the
-// option the user picked has gone away.
-usageSelect().value = 'matched';
-CLEAN.data.catalog[5].guid = '';
-CLEAN.refreshModFacets();
-assert.equal(usageSelect().children.length, 4,
-  'the option comes back as soon as one package needs it');
-assert.equal(usageSelect().value, 'matched', 'and the current choice survives');
-
-// Picking the option and then losing it resets to "all": the grid would
-// otherwise keep showing a subset the dropdown no longer offers.
-usageSelect().value = 'unknown';
-CLEAN.refreshModFacets();
-assert.equal(usageSelect().value, 'unknown', 'a choice that still exists is kept');
-
-CLEAN.data.catalog[5].guid = 'guid.5';
-CLEAN.refreshModFacets();
-assert.equal(usageSelect().children.length, 3, 'it goes away with the last package in it');
-assert.equal(usageSelect().value, '', 'a filter with nothing left to show resets to all');
-
-// The dependency view's own status filter follows the same rule, against the
-// snapshot it actually filters on.
-CLEAN.openView('deps');
-const modeSelect = clean.byId.get('dependencyControls').children[0];
-modeSelect.value = 'mods';
-modeSelect.onchange();
-assert.ok(!clean.byId.get('dependencyControls').children[2].children
-  .some(option => option.value === 'unknown'),
-  'a "cannot tell" filter the snapshot has nothing for is not offered');
 
 /* --- Orphaned tab -------------------------------------------------------- */
 

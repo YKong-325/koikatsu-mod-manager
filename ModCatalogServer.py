@@ -42,8 +42,12 @@ library_builder = load_module("library_builder", "Build-LibraryIndex.py")
 config = load_module("manager_config", "ManagerConfig.py")
 APP_ROOT = RESOURCE_ROOT
 GAME_ROOT = DATA_ROOT.parent
-# A single archive larger than this is left for the user to fetch by hand.
-MAX_PACKAGE = 800 * 1024 * 1024
+# Packages are streamed straight to disk, so the only real limit is free space.
+# A fixed 800 MB ceiling used to reject larger archives outright -- which is
+# exactly where the big shared map packs live (the two Sunshine map packs a
+# card wanted here are 1.0 GB and 1.6 GB), and the failure was something the
+# user could neither understand nor act on.
+DISK_MARGIN = 512 * 1024 * 1024
 
 
 def render_snapshot(server, cursor=0):
@@ -683,8 +687,14 @@ class CatalogHandler(SimpleHTTPRequestHandler):
                 label = row.get("name") or row["guid"]
                 job["current"] = label
                 try:
-                    if row.get("bytes", 0) > MAX_PACKAGE:
-                        raise ValueError("包超过 800 MB，未自动下载")
+                    size = row.get("bytes") or 0
+                    if size:
+                        free = shutil.disk_usage(server.mods).free
+                        if free < size + DISK_MARGIN:
+                            raise ValueError(
+                                f"磁盘空间不足：这个包 {size / 1048576:.0f} MB，"
+                                f"加上余量需要 {(size + DISK_MARGIN) / 1048576:.0f} MB，"
+                                f"当前只剩 {free / 1048576:.0f} MB")
                     destination = recovery.target_for(row, server.mods)
                     recovery.download(
                         row, destination, cancel=cancelled,

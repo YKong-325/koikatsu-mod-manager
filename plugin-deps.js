@@ -4,6 +4,12 @@
  * server) and never touches the Mod view's filter state, so entering and
  * leaving it cannot disturb where the user was.
  *
+ * One question only: which cards still miss packages, and how to fetch them.
+ * The other question this view used to answer -- which installed packages no
+ * card refers to -- belongs to housekeeping, not to a broken card, and reading
+ * a 7 000-row package list to find it made the page slower and noisier than
+ * the job it was opened for.
+ *
  * This is also the only place that needs the card records themselves, so they
  * are fetched on first use instead of being shipped with every page load.
  */
@@ -14,22 +20,13 @@
   const {data, el, setStatus} = KK;
   const SIZE = 40;
 
-  const state = {mode: 'cards', scope: '', filter: 'missing', text: '', page: 0,
-    picked: new Set()};
+  const state = {scope: '', filter: 'missing', text: '', page: 0, picked: new Set()};
   let list = [];
   let cardsLoaded = false;
   let fetching = false;
 
   const controls = el('div');
   controls.id = 'dependencyControls';
-
-  const mode = el('select');
-  mode.setAttribute('aria-label', '检查对象');
-  [['cards', '资源卡缺什么'], ['mods', '哪些 Mod 没被引用']].forEach(([value, label]) => {
-    const option = el('option', label);
-    option.value = value;
-    mode.append(option);
-  });
 
   const scope = el('select');
   scope.setAttribute('aria-label', '资源类型');
@@ -48,7 +45,7 @@
   query.placeholder = '文件名 / 路径 / GUID / Mod 名称';
   query.setAttribute('aria-label', '搜索检查结果');
 
-  controls.append(mode, scope, filter, query);
+  controls.append(scope, filter, query);
 
   const element = el('section');
   element.id = 'dependencyPanel';
@@ -291,40 +288,17 @@
     if (job.message) setStatus(job.message);
   }
 
-  /* The same rule as the Mod grid facet: a state nothing is in is not worth a
-   * filter, so "cannot tell" is offered only while the snapshot holds one. */
-  function unknownMods() {
-    const raw = KK.deps.raw;
-    if (!raw || !raw.mods) return 0;
-    let total = 0;
-    for (const path of Object.keys(raw.mods)) {
-      if (raw.mods[path].state === 'unknown') total += 1;
-    }
-    return total;
-  }
-
-  const FILTERS = {
-    cards: [['missing', '缺失 Mod'], ['complete', '依赖齐全'], ['unknown', '依赖未识别'],
-      ['', '全部资源卡']],
-    mods() {
-      const options = [['unmatched', '未匹配角色卡'], ['matched', '已匹配角色卡']];
-      if (unknownMods()) options.push(['unknown', '无法判断']);
-      options.push(['', '全部角色 Mod']);
-      return options;
-    }
-  };
+  const FILTERS = [['missing', '缺失 Mod'], ['complete', '依赖齐全'], ['unknown', '依赖未识别'],
+    ['', '全部资源卡']];
 
   function syncFilters() {
-    const registered = FILTERS[state.mode];
-    const options = typeof registered === 'function' ? registered() : registered;
-    filter.replaceChildren(...options.map(([value, label]) => {
+    filter.replaceChildren(...FILTERS.map(([value, label]) => {
       const option = el('option', label);
       option.value = value;
       return option;
     }));
-    if (!options.some(([value]) => value === state.filter)) state.filter = options[0][0];
+    if (!FILTERS.some(([value]) => value === state.filter)) state.filter = FILTERS[0][0];
     filter.value = state.filter;
-    scope.hidden = state.mode !== 'cards';
   }
 
   /* Two packages can carry the same GUID. Sideloader then loads only one of
@@ -339,8 +313,9 @@
    * every card on every page.
    */
   let guidGroups = null;
+  let guidGroupsCount = -1;
   function byGuid() {
-    if (guidGroups) return guidGroups;
+    if (guidGroups && guidGroupsCount === data.catalog.length) return guidGroups;
     guidGroups = new Map();
     for (const record of data.catalog) {
       const guid = (record.guid || '').trim().toLowerCase();
@@ -349,6 +324,9 @@
       if (rows) rows.push(record);
       else guidGroups.set(guid, [record]);
     }
+    // Deleting a package is the one thing that can end a collision, and it
+    // shortens the catalog, so the length is enough to notice it.
+    guidGroupsCount = data.catalog.length;
     return guidGroups;
   }
 
@@ -413,19 +391,18 @@
         el('span', '本次页面没有加载 deps.js，请通过管理器打开页面。', 'notice')
       ];
     }
-    const {summary: mods, coverage} = deps;
+    const {coverage} = deps;
     const clash = guidClashes();
-    const cardsMode = state.mode === 'cards';
     // A tick on a card that has since been fixed points at nothing; drop it so
     // the count in the button always matches what will really be downloaded.
     for (const path of [...state.picked]) {
       const entry = deps.cards[path];
       if (!entry || !(entry.missing || []).length) state.picked.delete(path);
     }
-    const pickable = cardsMode ? list.filter(resource => {
+    const pickable = list.filter(resource => {
       const verdict = KK.deps.card(resource.path);
       return verdict && verdict.state === 'missing';
-    }).length : 0;
+    }).length;
     if (!fetching) {
       const count = missingGuids().size;
       downloadButton.textContent = !count ? '下载缺失 Mod'
@@ -441,23 +418,20 @@
     pickAllButton.textContent = `全选当前结果（${pickable.toLocaleString()}）`;
     pickAllButton.disabled = !pickable;
     clearButton.disabled = !state.picked.size;
-    actions.replaceChildren(...(cardsMode ? [pickNote, pickAllButton, clearButton] : []),
-      downloadButton);
-    return [
-      el('strong', `角色相关 Mod ${mods.characterMods.toLocaleString()}`),
-      el('span', `已匹配 ${mods.matched.toLocaleString()} · ` +
-        `未匹配 ${mods.unmatched.toLocaleString()} · ` +
-        `无法判断 ${mods.unknown.toLocaleString()}` +
-        (clash.groups
-          ? ` · GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）` : '')),
-      el('span', `角色卡 ${coverage.total.toLocaleString()} · ` +
-        `依赖已识别 ${coverage.parsed.toLocaleString()} · ` +
+    actions.replaceChildren(pickNote, pickAllButton, clearButton, downloadButton);
+    const lines = [
+      el('strong', `角色卡 ${coverage.total.toLocaleString()}`),
+      el('span', `依赖已识别 ${coverage.parsed.toLocaleString()} · ` +
         `未识别 ${coverage.unknown.toLocaleString()} · ` +
         `缺失 ${coverage.missing.toLocaleString()} · ` +
-        `齐全 ${coverage.complete.toLocaleString()}`, 'notice'),
-      el('span', '缺失结果按包 GUID 与本体物品清单匹配；依赖未识别的卡片不计为缺失或齐全。',
-        'notice')
+        `齐全 ${coverage.complete.toLocaleString()}`, 'notice')
     ];
+    if (clash.groups) {
+      lines.push(el('span', `GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）`, 'notice'));
+    }
+    lines.push(el('span',
+      '缺失结果按包 GUID 与本体物品清单匹配；依赖未识别的卡片不计为缺失或齐全。', 'notice'));
+    return lines;
   }
 
   /* Only a card that is actually missing something is worth ticking: the tick
@@ -517,45 +491,6 @@
     return card;
   }
 
-  function modRow(record) {
-    const verdict = KK.deps.mod(record.path);
-    const card = el('article', undefined, 'library-card');
-    const cover = (record.images || [])[0];
-    if (cover) card.append(KK.media.thumb(cover.src, cover.name));
-    else card.append(el('div', '暂无预览图', 'empty'));
-    const meta = el('div', undefined, 'libmeta');
-    meta.append(el('div', record.name || record.file, 'name'),
-      el('div', record.path, 'path'),
-      el('div', `${record.slots.join(' / ') || record.dataDirs.join(' / ') || '未分类'} · ` +
-        `${(record.bytes / 1048576).toFixed(1)} MB`, 'count'));
-
-    // The dependency view lists the same packages and leads to the same
-    // question ("why is this one doing nothing"), so the banner belongs here
-    // too rather than only on the Mod grid.
-    if (sharesGuid(record).length || (verdict && verdict.duplicateGuid)) {
-      meta.prepend(conflictBanner(record));
-    }
-
-    const stateLabel = {unmatched: '未被任何角色卡引用', matched: null,
-      unknown: '无法判断引用状态', other: '非角色内容'}[verdict ? verdict.state : 'other'];
-    if (stateLabel) {
-      meta.append(el('div', stateLabel,
-        verdict && verdict.state === 'unmatched' ? 'detection-label missing' : 'detection-label'));
-    }
-    if (verdict && (verdict.cards.length || verdict.outfits.length || verdict.scenes.length)) {
-      meta.append(el('div', `角色卡 ${verdict.cards.length} · 服装卡 ${verdict.outfits.length} · ` +
-        `场景 ${verdict.scenes.length}`, 'count'));
-    }
-
-    const open = el('button', '在 Mod 中查看', 'relation-action');
-    open.type = 'button';
-    open.onclick = () => KK.openView('mods', {query: record.path});
-    meta.append(open);
-
-    card.append(meta);
-    return card;
-  }
-
   function render() {
     if (!KK.deps.raw) {
       summary.replaceChildren(...numbers());
@@ -565,26 +500,16 @@
       return;
     }
     const text = query.value.trim().toLowerCase();
-    const cardsMode = state.mode === 'cards';
 
-    list = cardsMode
-      ? data.library.filter(resource => {
-        if (state.scope && resource.kind !== state.scope) return false;
-        const verdict = KK.deps.card(resource.path);
-        const verdictState = verdict ? verdict.state : 'unknown';
-        if (state.filter && verdictState !== state.filter) return false;
-        if (!text) return true;
-        return [resource.path, ...resource.mods, ...(resource.references || [])
-          .map(ref => ref.guid)].join('\n').toLowerCase().includes(text);
-      })
-      : data.catalog.filter(record => {
-        const verdict = KK.deps.mod(record.path);
-        if (!verdict) return false;
-        if (state.filter && verdict.state !== state.filter) return false;
-        if (!text) return true;
-        return [record.path, record.name, record.guid].join('\n')
-          .toLowerCase().includes(text);
-      });
+    list = data.library.filter(resource => {
+      if (state.scope && resource.kind !== state.scope) return false;
+      const verdict = KK.deps.card(resource.path);
+      const verdictState = verdict ? verdict.state : 'unknown';
+      if (state.filter && verdictState !== state.filter) return false;
+      if (!text) return true;
+      return [resource.path, ...resource.mods, ...(resource.references || [])
+        .map(ref => ref.guid)].join('\n').toLowerCase().includes(text);
+    });
 
     list.sort((a, b) => a.path.localeCompare(b.path));
     const pages = Math.max(1, Math.ceil(list.length / SIZE));
@@ -592,10 +517,9 @@
     summary.replaceChildren(...numbers());
     grid.replaceChildren();
     for (const entry of list.slice(state.page * SIZE, (state.page + 1) * SIZE)) {
-      grid.append(cardsMode ? cardRow(entry) : modRow(entry));
+      grid.append(cardRow(entry));
     }
-    setStatus(`${list.length.toLocaleString()} 条结果 · ` +
-      (cardsMode ? '资源卡缺失检查' : '角色 Mod 引用检查'));
+    setStatus(`${list.length.toLocaleString()} 张卡 · 资源卡缺失检查`);
     KK.refreshPager();
   }
 
@@ -604,11 +528,6 @@
     if (rerender !== false) render();
   }
 
-  mode.onchange = () => {
-    state.mode = mode.value;
-    syncFilters();
-    reset();
-  };
   scope.onchange = () => { state.scope = scope.value; reset(); };
   filter.onchange = () => { state.filter = filter.value; reset(); };
   query.oninput = () => reset();
@@ -621,8 +540,7 @@
     controls,
     dock: actions,
     element,
-    render(params) {
-      if (params && params.mode) { state.mode = params.mode; mode.value = params.mode; syncFilters(); }
+    render() {
       render();
       ensureCards();
     },
@@ -635,91 +553,14 @@
     }
   });
 
-  /* Extension points on the resident views.
-   *
-   * The Mod grid asks a different question from the dependency view above: not
-   * "is this a character mod nobody wears" but "does anything reference this
-   * package at all". A package is only safe to drop when no character card, no
-   * outfit card and no scene names it, so the facet counts all three. */
-  const KINDS = ['角色卡', '服装卡', '场景'];
-
-  function references(verdict) {
-    const cards = (verdict.cards || []).length;
-    const outfits = (verdict.outfits || []).length;
-    const scenes = (verdict.scenes || []).length;
-    return {cards, outfits, scenes, total: cards + outfits + scenes};
-  }
-
-  function libraryHasCards() {
-    const raw = KK.deps.raw;
-    if (!raw) return false;
-    if (raw.coverageByKind) {
-      return KINDS.some(kind => {
-        const value = raw.coverageByKind[kind];
-        return Boolean(value && value.parsed);
-      });
-    }
-    return Boolean(raw.coverage && raw.coverage.parsed);
-  }
-
-  function cardState(record) {
-    const verdict = KK.deps.mod(record.path);
-    if (!verdict) return 'unknown';
-    if (references(verdict).total) return 'matched';
-    // No GUID, or nothing parsed in the library, means no reference is merely
-    // an absence of evidence rather than evidence of absence.
-    return record.guid && libraryHasCards() ? 'unmatched' : 'unknown';
-  }
-
-  /* "Cannot tell" is a real verdict -- a package without a GUID, or one the
-   * index has not covered yet -- but on a healthy catalog nothing lands in it,
-   * and an option that can only ever return nothing is noise in the dropdown.
-   * It therefore appears only while something is actually in that state. */
-  function unknownReferences() {
-    let total = 0;
-    for (const record of data.catalog) {
-      if (cardState(record) === 'unknown') total += 1;
-    }
-    return total;
-  }
-
-  KK.registerModFacet({
-    id: 'usage',
-    label: '卡片引用',
-    options() {
-      const choices = [['', '全部引用状态'], ['unmatched', '未被任何卡片引用'],
-        ['matched', '已被卡片引用']];
-      if (unknownReferences()) choices.push(['unknown', '无法判断']);
-      return choices;
-    },
-    match(record, value) { return cardState(record) === value; }
-  });
-
   KK.onModCard((record, card, meta) => {
     const verdict = KK.deps.mod(record.path);
-    /* A GUID collision is a fact about the package, not about the current
-     * filter: it stays on the card whatever "卡片引用" says, and it goes above
-     * the package name so it cannot be read as a footnote to it. This used to
-     * hide behind the usage filter, which is why four colliding packages were
-     * invisible on the default view. */
+    /* A GUID collision is a fact about the package, not about any filter, and
+     * it goes above the package name so it cannot be read as a footnote to it.
+     * This used to hide behind the "card reference" filter, which is why four
+     * colliding packages were invisible on the default view. */
     if (sharesGuid(record).length || (verdict && verdict.duplicateGuid)) {
       meta.prepend(conflictBanner(record));
     }
-    if (!KK.facetValue('usage')) return;
-    if (!verdict) return;
-    const state = cardState(record);
-    const refs = references(verdict);
-    const label = {
-      unmatched: '未被任何卡片引用',
-      matched: `被 ${refs.total} 张卡片引用`,
-      unknown: record.guid ? '资源卡索引不足，无法判断' : '包内未声明 GUID，无法判断'
-    }[state];
-    if (label) {
-      meta.append(el('div', label, 'detection-label ' +
-        (state === 'matched' ? 'installed' : 'duplicate')));
-    }
-    const breakdown = [['角色卡', refs.cards], ['服装卡', refs.outfits], ['场景', refs.scenes]]
-      .filter(([, count]) => count).map(([kind, count]) => `${kind} ${count}`);
-    if (breakdown.length) meta.append(el('div', breakdown.join(' · '), 'notice'));
   });
 })();
