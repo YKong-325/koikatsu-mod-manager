@@ -128,10 +128,13 @@ def main():
             [{"guid": "Maker.Hat"}, {"guid": "Sun.Skirt"},
              {"guid": "Kks.Only"}, {"guid": "Absent.One"}],
             files, folder, report=coverage)
-        assert list(answered) == ["maker.hat"], answered
+        # The Sunshine build and the KKS_-named archive are still answers: the
+        # archive belongs to whoever asked, and only the game can refuse it on
+        # load. They are ranked last and reported as fallbacks, not withheld.
+        assert sorted(answered) == ["kks.only", "maker.hat", "sun.skirt"], answered
         assert coverage["scanned"] == 3, coverage
         assert [row["url"] for row in coverage["unreadable"]] == [files[3]], coverage
-        reasons = {row["guid"]: row["reason"] for row in coverage["skipped"]}
+        reasons = {row["guid"]: row["reason"] for row in coverage["fallbacks"]}
         assert reasons == {"Sun.Skirt": "kks", "Kks.Only": "kks"}, coverage
 
         # A failed read is not an answer, so the next run tries that archive
@@ -148,9 +151,10 @@ def main():
         assert not later["unreadable"], later
 
         # The same pack serves both games: the Sunshine build must be the one a
-        # KKS install picks, and the Koikatsu one must be refused -- the reverse
-        # of the pass above. An archive that declares no game is still usable,
-        # but a declared Sunshine build wins even over a newer undeclared one.
+        # KKS install prefers, and the Koikatsu-only build comes back marked as
+        # a fallback instead of being dropped. An archive that declares no game
+        # is still usable, but a declared Sunshine build wins even over a newer
+        # undeclared one.
         extra = base + "Sun/%5BSun%5D%20Skirt%20v2.zipmod"
         kks_files = files + [extra]
         kks_cache = {
@@ -169,9 +173,26 @@ def main():
             kks_files, folder, report=kks_coverage, flavour="kks")
         assert kks["sun.skirt"]["url"] == files[1], kks
         assert kks["old.both"]["url"] == files[2], kks
-        assert "maker.hat" not in kks, kks
-        assert {row["guid"]: row["reason"] for row in kks_coverage["skipped"]} == {
+        assert kks["maker.hat"]["url"] == files[0], kks
+        assert {row["guid"]: row["reason"] for row in kks_coverage["fallbacks"]} == {
             "Maker.Hat": "kk"}, kks_coverage
+
+        # One archive in the index declares both games at once. Splitting it
+        # into a phrase that belongs to neither list used to hide it from both
+        # installs; matching by whole words keeps it usable everywhere.
+        both_url = base + "Both/%5BBoth%5D%20Hat.zipmod"
+        both_cache = {both_url: {"guid": "Both.Hat", "name": "Hat",
+                                 "game": "Koikatsu, Koikatsu Sunshine",
+                                 "version": "1.0", "url": both_url}}
+        for flavour in ("kk", "kks"):
+            Path(folder, f"missing-manifests{'' if flavour == 'kk' else '-' + flavour}.json"
+                 ).write_text(json.dumps(
+                     {"fetchedAt": 0, "rows": both_cache}), "utf-8")
+            seen = {}
+            picked = recovery.resolve([{"guid": "Both.Hat"}], [both_url], folder,
+                                      report=seen, flavour=flavour)
+            assert picked["both.hat"]["url"] == both_url, (flavour, picked)
+            assert not seen["fallbacks"], (flavour, seen)
 
     # What the folder ships decides which build is the right one. Ambiguity and
     # an empty folder fall back to KK, which is what every older index assumed.
@@ -190,7 +211,8 @@ def main():
 
     print("PASS: missing GUID grouping, install target layout, path and host "
           "refusal, manifest parsing, what a scan did not answer, retrying the "
-          "archives it could not read, and picking each game's own build")
+          "archives it could not read, and preferring each game's own build "
+          "while still handing back the other one")
 
 
 if __name__ == "__main__":

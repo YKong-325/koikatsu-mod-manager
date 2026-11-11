@@ -486,16 +486,19 @@ def main():
                         report.update({
                             "scanned": 7469,
                             "unreadable": [{"url": files[0], "error": "timed out"}],
-                            "skipped": [{"guid": "test.kks", "name": "Sunny",
-                                         "version": "1.0", "game": "Koikatsu Sunshine",
-                                         "url": files[0] + "KKS_", "reason": "kks"}]})
-                    return {guid.casefold(): {"guid": guid, "url": files[0], "bytes": 0,
-                                              "name": "Stub", "version": "1.0",
-                                              "game": "koikatu", "author": "Test"}}
+                            "fallbacks": [{"guid": "test.kks", "name": "Sunny",
+                                           "version": "1.0", "game": "Koikatsu Sunshine",
+                                           "url": files[0] + "KKS_", "reason": "kks"}]})
+                    return {row["guid"].casefold(): {
+                                "guid": row["guid"], "url": files[0], "bytes": 0,
+                                "name": "Stub", "version": "1.0",
+                                "game": "koikatu", "author": "Test"}
+                            for row in rows if row["guid"] in (guid, "test.kks")}
 
                 @staticmethod
                 def target_for(row, mods):
-                    return Path(mods) / "ForCharactersLoading" / "Test" / "stub.zipmod"
+                    return (Path(mods) / "ForCharactersLoading" / "Test"
+                            / (row["guid"] + ".zipmod"))
 
                 @staticmethod
                 def download(row, destination, progress=None, cancel=None):
@@ -528,26 +531,25 @@ def main():
                     time.sleep(0.05)
                 assert not fetched["error"], fetched["error"]
                 assert fetched["flavour"] == "kk", fetched
-                assert fetched["stage"] == "完成" and fetched["done"] == 1, fetched
+                assert fetched["stage"] == "完成" and fetched["done"] == 2, fetched
                 assert fetched["requested"] == 3, fetched
-                assert fetched["matched"] == 1 and fetched["failed"] == 0, fetched
+                assert fetched["matched"] == 2 and fetched["failed"] == 0, fetched
                 # The GUID the pack cannot answer is reported, with the author
                 # the card recorded, so the page can name it instead of leaving
                 # the user staring at "installed 0".
                 assert [row["guid"] for row in fetched["unmatched"]] == \
-                    ["test.absent", "test.kks"], fetched
+                    ["test.absent"], fetched
                 assert fetched["unmatched"][0]["authors"] == ["Ghost"]
                 assert fetched["unmatched"][0]["websites"] == ["https://example.invalid/x"]
-                # "Not there" and "only a Sunshine build is there" are different
-                # answers, and the page can only say so if the job carries both
-                # the reason per GUID and what the scan actually covered.
-                assert [row["reason"] for row in fetched["unmatched"]] == \
-                    ["absent", "kks"], fetched
+                assert fetched["unmatched"][0]["reason"] == "absent", fetched
+                # The Sunshine-only build is downloaded all the same -- whether
+                # it loads is the game's call -- so it is reported as a
+                # fallback and no longer counted among the unanswered ones.
+                assert [row["guid"] for row in fetched["fallbacks"]] == ["test.kks"], fetched
                 assert fetched["scanned"] == 7469 and fetched["unreadable"] == 1, fetched
-                assert [row["guid"] for row in fetched["skipped"]] == ["test.kks"], fetched
-                assert len(fetched["updates"]) == 1, fetched["updates"]
-                landed = fetched["updates"][0]
-                assert landed["guid"] == guid and landed["file"] == "stub.zipmod"
+                assert len(fetched["updates"]) == 2, fetched["updates"]
+                landed = next(row for row in fetched["updates"] if row["guid"] == guid)
+                assert landed["file"] == guid + ".zipmod"
                 assert (mods / landed["path"]).is_file()
                 assert next(record for record in json.loads(
                     (catalog / "index.json").read_text("utf-8"))

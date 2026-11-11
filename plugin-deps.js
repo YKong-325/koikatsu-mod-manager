@@ -147,14 +147,14 @@
     const installed = (job.updates || []).length;
     const requested = job.requested || job.total || 0;
     const rejected = job.unmatched || [];
-    /* The pack ships the same mod for both games, so an unmatched GUID is
-     * either "the pack lacks it" or "only the other game's build exists" --
-     * and which one is "the other game" flips with the install. */
+    /* The pack ships the same mod for both games, and which one is "the other
+     * game" flips with the install. Those builds are downloaded all the same:
+     * the archive belongs to whoever asked for it, and the game -- not this
+     * program -- decides whether it loads. Say so, because the count on its own
+     * would read as "some of these will not work". */
     const other = job.flavour === 'kks' ? 'kk' : 'kks';
     const otherLabel = other === 'kk' ? 'KK' : 'KKS';
-    const wrongGame = rejected.filter(row => row.reason === 'kks'
-      || row.reason === 'kk' || row.reason === 'game');
-    const absent = rejected.filter(row => !wrongGame.includes(row));
+    const fallbacks = job.fallbacks || [];
     const parts = [`请求 ${requested.toLocaleString()} 个 GUID`];
     if (job.matched !== undefined && job.matched !== null) {
       parts.push(`公共索引里找到 ${job.matched.toLocaleString()} 个`);
@@ -162,12 +162,18 @@
     parts.push(`安装 ${installed.toLocaleString()} 个`);
     if (job.flavour) parts.push(`按 ${job.flavour === 'kks' ? 'KKS' : 'KK'} 索引`);
     if (job.failed) parts.push(`${job.failed.toLocaleString()} 个下载失败`);
-    if (absent.length) parts.push(`${absent.length.toLocaleString()} 个公共索引里没有`);
-    if (wrongGame.length) {
-      parts.push(`${wrongGame.length.toLocaleString()} 个只有 ${otherLabel} 版`);
+    if (rejected.length) parts.push(`${rejected.length.toLocaleString()} 个公共索引里没有`);
+    if (fallbacks.length) {
+      parts.push(`其中 ${fallbacks.length.toLocaleString()} 个只有 ${otherLabel} 版`);
     }
 
     const children = [el('strong', '上次下载'), el('span', parts.join(' · '))];
+    if (fallbacks.length) {
+      children.push(el('span',
+        `${fallbacks.length.toLocaleString()} 个包只提供了 ${otherLabel} 版（作者在 manifest 里标注的），`
+        + `已经照样下载。游戏加载时会按这个标注决定要不要用它——`
+        + '留在 mods 里不影响现有内容，另有一台机器或准备换版本时可以直接拿过去。', 'notice'));
+    }
     if (job.error) {
       children.push(el('span', job.error, 'notice'));
       // The failure mode that reads as a bug but is not: a browser reaches the
@@ -193,9 +199,6 @@
         const authors = (row.authors || []).join('、');
         if (authors) item.append(el('span', ' · ' + authors));
         if (row.cards) item.append(el('span', ` · ${row.cards} 张卡`, 'notice'));
-        if (row.reason === 'kks' || row.reason === 'kk' || row.reason === 'game') {
-          item.append(el('span', ` · 索引里只有 ${otherLabel} 版`, 'notice'));
-        }
         const site = (row.websites || [])[0];
         if (site) {
           const link = el('a', '来源页面');

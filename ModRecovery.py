@@ -62,12 +62,17 @@ PACKS_KKS = (
     "Sideloader Modpack - Bleeding Edge",
 )
 FLAVOURS = {"kk": PACKS, "kks": PACKS_KKS}
-# Manifest <game> values, normalised to lowercase words. An empty field is the
+# Manifest <game> values, split into the games they name. An empty field is the
 # common case (6370 of 7548 archives) and means "shipped before the field
 # existed", so it is accepted by both games -- rejecting it would leave a KKS
 # user with only the 801 archives that bother to declare themselves.
-GAMES = {"kk": ("koikatu", "koikatsu", "kk"),
-         "kks": ("koikatsu sunshine", "kks", "sunshine")}
+#
+# The field is a comma-separated list in the packs that bother to fill it, and
+# "Koikatsu Sunshine" contains "Koikatsu", so the words are classified per name
+# instead of compared as substrings: Sunshine is its own game, and an archive
+# that lists both is usable by both.
+GAME_WORDS = {"kks": ("sunshine", "kks"),
+              "kk": ("koikatu", "koikatsu", "koikatsu party", "kk")}
 # What the folder itself says it is. A Sunshine install ships its own executable
 # and data folder; neither game directory is ever the other's parent.
 MARKERS = {"kks": ("KoikatsuSunshine.exe", "KoikatsuSunshine_Data",
@@ -357,6 +362,36 @@ def crawl(catalog, progress=None, cancel=None, flavour="kk"):
     return files
 
 
+def declares(row, flavour):
+    """"yes", "no" or "unsaid" about the game an archive is for.
+
+    An empty field is the common case (6370 of 7548 archives) and means
+    "shipped before the field existed", so it is accepted by both games --
+    rejecting it would leave a KKS user with only the 801 archives that bother
+    to declare themselves.
+
+    Each comma-separated name is classified on its own words. Substring
+    matching would be wrong twice over: "Koikatsu Sunshine" contains
+    "Koikatsu", and one archive in the index declares both games at once
+    ("Koikatsu, Koikatsu Sunshine") and would otherwise fall between the lists.
+    A name that belongs to neither game (AI Girl, Honey Select 2) is a "no".
+    """
+    named = set()
+    for name in re.split(r"[,;/|]", row.get("game") or ""):
+        words = set(re.sub(r"[^a-z]+", " ", name.casefold()).split())
+        if not words:
+            continue
+        # Sunshine first: its name contains "Koikatsu", so one name must be
+        # classified once, not counted for both games.
+        for game in ("kks", "kk"):
+            if any(set(marker.split()) <= words for marker in GAME_WORDS[game]):
+                named.add(game)
+                break
+    if not named:
+        return None if not (row.get("game") or "").strip() else False
+    return flavour in named
+
+
 def resolve(wanted, files, catalog, progress=None, cancel=None, report=None,
             flavour="kk"):
     """Map wanted GUIDs to archives by reading only each archive's manifest.
@@ -367,16 +402,18 @@ def resolve(wanted, files, catalog, progress=None, cancel=None, report=None,
     soon as every GUID has been found. A full pass is only paid when the names
     gave nothing away, and even then it resumes from the cache.
 
-    `flavour` decides which build of a mod is the right one: the pack ships the
-    same GUID for both games, so a KK install must refuse the Sunshine build and
-    a KKS install must refuse the Koikatsu one. Archives that declare no game at
-    all predate the field and are accepted by both, but a declared build always
-    wins over an undeclared one.
+    `flavour` only decides which build of a mod is *preferred*: the pack ships
+    the same GUID for both games, so a KK install picks the Koikatsu build when
+    one exists. The other game's build is still returned, marked in `report`,
+    because the archive belongs to whoever asked for it -- a shared `mods`
+    folder, a second install, or a migration -- and whether the game will load
+    it is the game's own decision (Sideloader skips a mismatched manifest with
+    "because it's meant for ..."), not this module's.
 
-    An unanswered GUID has three different causes -- the pack does not ship it,
-    only the other game's build exists, or the archive could not be read -- and
-    they all look like "not found" here. `report`, when given, is filled with
-    the counts and the skipped builds so the caller can say which happened.
+    An unanswered GUID has two causes -- the pack does not ship it, or its
+    archive could not be read -- and they look alike here. `report`, when given,
+    is filled with the counts, the builds that only exist for the other game,
+    and the archives that failed, so the caller can say which happened.
     """
     cache = Path(catalog) / _cache_name("missing-manifests", flavour)
     stored = _read(cache, {})
@@ -427,47 +464,41 @@ def resolve(wanted, files, catalog, progress=None, cancel=None, report=None,
             if done % 25 == 0 and len(matched()) == len(wanted_keys):
                 break
     _write(cache, {"fetchedAt": time.time(), "rows": scanned})
-    wanted_games = GAMES.get(flavour, GAMES["kk"])
     other = "kk" if flavour == "kks" else "kks"
-    found, skipped = {}, {}
+    found = {}
     for row in scanned.values():
         key = (row.get("guid") or "").casefold()
         if key not in wanted_keys:
             continue
-        game = re.sub(r"[^a-z]+", " ",
-                      (row.get("game") or "").casefold()).strip()
-        looks_kks = "KKS_" in urllib.parse.unquote(row["url"])
-        if game and game not in wanted_games:
-            skipped.setdefault(key, dict(row, reason=other))
-            continue
-        if not game and looks_kks:
-            # No declared game, but the file name says which build it is. That
-            # is the only hint those archives carry, and it is wrong only for
-            # the one archive in 7548 whose name mixes both in.
-            if flavour == "kk":
-                skipped.setdefault(key, dict(row, reason="kks"))
-                continue
-        # A declared build beats an undeclared one: the two are the same mod
-        # for two games, and installing the other game's copy is worse than
-        # installing an old unversioned one.
+        declared = declares(row, flavour)
+        # No declared game, but the file name says which build it is. That hint
+        # is the only one those archives carry; it decides the ranking, never
+        # whether the download is offered.
+        name_says_kks = "KKS_" in urllib.parse.unquote(row["url"])
+        compatible = declared is not False and not (
+            declared is None and name_says_kks and flavour == "kk")
+        # A declared build beats an undeclared one, and an undeclared one beats
+        # the other game's build: the two are the same mod for two games, and
+        # installing the wrong copy is worse than installing an old unversioned
+        # one. Version only breaks ties inside the same rank.
         version = tuple(int(part) for part in re.findall(r"\d+", row.get("version", "")))
-        score = (1 if game else 0, version)
+        score = (1 if compatible else 0, 1 if declared is not None else 0, version)
         if key not in found or score > found[key][0]:
             found[key] = (score, row)
     if report is not None:
         unreadable = [{"url": url, "error": row.get("error", "")}
                       for url, row in scanned.items() if row.get("error")]
-        # A GUID that was answered from one build is not "only the other game's
-        # version", even though the wrong build was set aside on the way; only
-        # the ones left unanswered belong in the report.
-        rejected = [row for key, row in skipped.items() if key not in found]
         report.update({
             "scanned": len(scanned) - len(unreadable),
             "unreadable": unreadable,
-            "skipped": [{"guid": row.get("guid", ""), "name": row.get("name", ""),
-                         "version": row.get("version", ""),
-                         "game": row.get("game", ""), "url": row["url"],
-                         "reason": row["reason"]} for row in rejected],
+            # Answered, but only by the build the other game declares. The
+            # caller downloads it anyway and says so; silent is the one thing
+            # this must not be, because the game may skip it on load.
+            "fallbacks": [{"guid": row.get("guid", ""), "name": row.get("name", ""),
+                           "version": row.get("version", ""),
+                           "game": row.get("game", ""), "url": row["url"],
+                           "reason": other}
+                          for score, row in found.values() if not score[0]],
         })
     return {key: row for key, (_score, row) in found.items()}
 

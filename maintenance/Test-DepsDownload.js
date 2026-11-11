@@ -68,20 +68,26 @@ async function main() {
   assert.match($('dependencyReport').textContent, /guid\.x：连接中断/,
     'the per-package failure reason is shown, not just counted');
 
-  /* A round where the only build is a Sunshine one and some archives could not
-   * be read: calling all of them "not in the index" would be the wrong half of
-   * the story, so the two reasons and the coverage are reported apart. */
-  job = {running: false, stage: '完成', message: '', requested: 2, total: 0,
-    matched: 0, done: 0, failed: 0, cursor: 0, error: '', problems: [],
-    scanned: 7469, unreadable: 79,
-    unmatched: [{guid: 'h0stile', authors: ['H0STILE'], websites: [], cards: 2,
-      reason: 'kks'},
-      {guid: 'gone', authors: [], websites: [], cards: 1, reason: 'absent'}]};
+  /* A round where one GUID is only shipped as a Sunshine build and one is not
+   * in the index at all. The Sunshine build is still downloaded -- the game,
+   * not this program, decides whether it loads -- so the answer has to say it
+   * was installed and why it might not show up, instead of implying a failure. */
+  job = {running: false, stage: '完成', message: '', requested: 2, total: 2,
+    matched: 2, done: 2, failed: 0, cursor: 1, error: '', problems: [],
+    scanned: 7469, unreadable: 79, updates: [
+      {guid: 'h0stile', file: 'h0stile.zipmod', path: 'h0stile.zipmod', bytes: 1}],
+    fallbacks: [{guid: 'h0stile', name: 'H0STILE', version: '1.0',
+      game: 'Koikatsu Sunshine', url: 'https://example.invalid/h0stile.zipmod',
+      reason: 'kks'}],
+    unmatched: [{guid: 'gone', authors: [], websites: [], cards: 1, reason: 'absent'}]};
   await download.onclick();
   const mixed = $('dependencyReport').textContent;
   assert.match(mixed, /1 个公共索引里没有/, 'only the truly absent one is called absent');
-  assert.match(mixed, /1 个只有 KKS 版/, 'a Sunshine-only build is counted apart');
-  assert.match(mixed, /索引里只有 KKS 版/, 'the row itself says why it was skipped');
+  assert.match(mixed, /其中 1 个只有 KKS 版/, 'the other game\'s build is counted apart');
+  assert.match(mixed, /已经照样下载/, 'it is downloaded, not withheld');
+  assert.match(mixed, /游戏加载时会按这个标注决定/, 'the game is named as the one who decides');
+  assert.doesNotMatch(mixed, /索引里只有 KKS 版/,
+    'the row is not listed as missing any more, because it was downloaded');
   /* How many archives were read belongs to the log, not the page: the answer
    * line stays one line long. */
   assert.doesNotMatch(mixed, /核对了|读不出来/,

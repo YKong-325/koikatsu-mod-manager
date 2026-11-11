@@ -46,7 +46,7 @@
 - 数据来自公共整合站（`sideload.betterrepack.com` 的 `KKEC` 目录），本项目不托管、也不分发任何 Mod。
 - **第一次点要先读一遍公共索引**（七千多个归档），视网络通常半小时以上，页面会显示进度并持续刷新。**读完当场就能下载，没有等待期。** 读到的目录清单会存成 `catalog\missing-index.json`，七天内再点都直接跳过这一步，秒进匹配；七天之后再点才会重新读一次。中途取消不会留下坏文件，只是下次需要从头读。
 - **游戏版本自动识别**：游戏根目录里有 `KoikatsuSunshine.exe` 或 `KoikatsuSunshine_Data` 就按 KKS 查，有 `Koikatsu.exe` 或 `Koikatsu_Data` 就按 KK 查。判不出来时按 KK 处理，报告里会写明按哪个版本查找。
-- 选包只看包内 `manifest.xml` 的 GUID 和版本：要 KK 就跳过 Sunshine 版，要 KKS 就跳过 Koikatsu 版；没写 `<game>` 的老包（占多数）两边都收，但同一 GUID 有声明版本的包时优先用声明的那个。
+- 选包只看包内 `manifest.xml` 的 GUID 和版本：同一个 GUID 有两个版本时，优先当前游戏的那份，其次是没写 `<game>` 的老包。**只有另一个版本时也照样下载**，并在报告里注明——是否加载由游戏自己决定（Sideloader 会按 manifest 跳过不匹配的包），管理器不替用户裁决；留着它不影响现有内容，另有一台机器或准备换版本时可以直接拿过去。
 - 下载后按包所在目录放进 `mods` 下对应子目录（`ForCharactersLoading`、`ForStudioScenesLoading`、`KK_-ExtraMaps`），与手动安装的位置一致。
 
 **网络说明**：下载走的是程序自己的网络通道，跟浏览器是两条路。浏览器能打开整合站，不代表程序也能打开。如果用了加速器或浏览器插件里的代理，请把系统代理也开起来。失败时看 `runtime/manager.log`，里面会写明卡在哪一步——连不上站点、目录读取失败、还是某个包下载失败。

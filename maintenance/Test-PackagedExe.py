@@ -406,7 +406,7 @@ def main():
             # The job has to carry what the scan covered, or the page cannot tell
             # "the pack lacks it" from "the manifest could not be read".
             idle_job = json.loads(get("/api/missing-mods/job"))
-            assert {"scanned", "unreadable", "skipped"} <= set(idle_job), idle_job
+            assert {"scanned", "unreadable", "fallbacks"} <= set(idle_job), idle_job
             classification = {"work": "测试作品", "character": "测试角色", "author": "作者"}
             assert post("/api/mod-classification", {
                 "path": "sample.zipmod", "classification": classification

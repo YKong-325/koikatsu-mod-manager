@@ -67,7 +67,7 @@ def missing_snapshot(server, cursor=0):
         return {"running": False, "stage": "", "message": "", "total": 0, "done": 0,
                 "failed": 0, "matched": 0, "current": "", "updates": [], "cursor": 0,
                 "error": "", "problems": [], "scanned": 0, "unreadable": 0,
-                "skipped": [], "flavour": ""}
+                "fallbacks": [], "flavour": ""}
     updates = job["updates"]
     cursor = max(0, min(cursor, len(updates)))
     return {"running": job["running"], "stage": job["stage"], "message": job["message"],
@@ -79,7 +79,7 @@ def missing_snapshot(server, cursor=0):
             "unmatched": job.get("unmatched", [])[:500],
             "scanned": job.get("scanned", 0),
             "unreadable": job.get("unreadable", 0),
-            "skipped": job.get("skipped", [])[:200],
+            "fallbacks": job.get("fallbacks", [])[:200],
             "flavour": job.get("flavour", "")}
 
 
@@ -538,7 +538,7 @@ class CatalogHandler(SimpleHTTPRequestHandler):
                "requested": len(rows), "total": len(rows), "done": 0, "failed": 0,
                "matched": 0, "current": "", "cancel": False, "updates": [],
                "error": "", "problems": [], "unmatched": [], "flavour": flavour,
-               "scanned": 0, "unreadable": 0, "skipped": []}
+               "scanned": 0, "unreadable": 0, "fallbacks": []}
         self.server.fetch_job = job
         threading.Thread(target=self._fetch_worker, args=(job, rows, flavour),
                          daemon=True).start()
@@ -613,15 +613,17 @@ class CatalogHandler(SimpleHTTPRequestHandler):
             chosen = [found[key] for key in sorted(found)]
             job["matched"] = len(chosen)
             job["total"] = len(chosen)
-            # "Not in the pack" has three causes that all look alike from here:
-            # nothing shipped, only a Sunshine build exists, or the archive's
-            # manifest could not be read. Carry the coverage so the page can
-            # state which one applies instead of claiming the pack lacks it.
+            # "Not in the pack" has two causes that look alike from here:
+            # nothing shipped, or the archive's manifest could not be read.
+            # Carry the coverage so the page can state which one applies
+            # instead of claiming the pack lacks it.
             job["scanned"] = coverage.get("scanned", 0)
             job["unreadable"] = len(coverage.get("unreadable") or [])
-            job["skipped"] = coverage.get("skipped") or []
-            skipped = {row["guid"].casefold(): row["reason"]
-                       for row in job["skipped"]}
+            # Answered, but only by the build the other game declares. It is
+            # downloaded anyway -- the user asked for that archive, and a shared
+            # mods folder or a second install is a real reason to want it -- and
+            # the job says so, because the game itself may skip it on load.
+            job["fallbacks"] = coverage.get("fallbacks") or []
             # A GUID the public pack does not ship is the common case, not an
             # error, and a bare "installed 0" reads like a failure. Keep the
             # ones that went unanswered -- with the author and the page the card
@@ -630,21 +632,13 @@ class CatalogHandler(SimpleHTTPRequestHandler):
             job["unmatched"] = [
                 {"guid": row["guid"], "authors": row.get("authors") or [],
                  "websites": row.get("websites") or [],
-                 "cards": len(row.get("cards") or []),
-                 "reason": skipped.get(row["guid"].casefold(), "absent")}
+                 "cards": len(row.get("cards") or []), "reason": "absent"}
                 for row in rows if row["guid"].casefold() not in found][:500]
             if not chosen:
-                mine = flavour.upper()
-                theirs = "KKS" if flavour == "kk" else "KK"
-                if skipped and len(skipped) < len(rows):
-                    job["message"] = (f"公共索引里没有能装给 {mine} 的包："
-                                      f"{len(rows) - len(skipped)} 个没收录，"
-                                      f"{len(skipped)} 个只有 {theirs} 版")
-                elif skipped:
-                    job["message"] = (f"公共索引里只有 {theirs} 版，"
-                                      f"没有能装给 {mine} 的包")
-                else:
-                    job["message"] = "公共索引里没有找到这些 Mod"
+                job["message"] = "公共索引里没有找到这些 Mod"
+            elif job["fallbacks"]:
+                job["message"] = (f"找到 {len(chosen)} 个，正在下载"
+                                  f"（其中 {len(job['fallbacks'])} 个只有另一版本）")
             installed = []
             for row in chosen:
                 if cancelled():
