@@ -657,9 +657,10 @@ class CatalogHandler(SimpleHTTPRequestHandler):
                 for row in rows if row["guid"].casefold() not in found][:500]
             if not chosen:
                 job["message"] = "公共索引里没有找到这些 Mod"
-            elif job["fallbacks"]:
-                job["message"] = (f"找到 {len(chosen)} 个，正在下载"
-                                  f"（其中 {len(job['fallbacks'])} 个只有另一版本）")
+            else:
+                # Which game a manifest declares is the game's business; the
+                # progress line only has to say that work has started.
+                job["message"] = f"找到 {len(chosen)} 个，开始下载"
             installed = []
             for row in chosen:
                 if cancelled():

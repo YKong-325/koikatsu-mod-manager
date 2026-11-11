@@ -303,12 +303,14 @@ def main():
             # line on every pass -- which made a finished round look dead.
             assert "dependencyReport" in report and "paintReport" in report
             assert "unmatched" in report and "复制全部 GUID" in report
-            # "The pack does not have it" and "the pack only has the other
-            # game's build" are different answers, and which game is "the
-            # other" depends on the install. How many archives were read stays
-            # in the log -- the answer itself is one line.
-            assert "只有 ${otherLabel} 版" in report
-            assert "job.flavour" in report
+            # The answer is two numbers: what the index matched, what was
+            # installed. Which game a manifest declares, which index was used
+            # and how many archives were read are method, and belong in the
+            # log -- spelling them out made the line unreadable.
+            assert "匹配 ${matched.toLocaleString()} 个" in report
+            assert "下载 ${installed.toLocaleString()} 个" in report
+            assert "只有 ${otherLabel} 版" not in report
+            assert "job.flavour" not in report.split("function paintReport")[1].split("function fetchMissing")[0]
             assert "核对了 " not in report and "unreadable" not in report
             assert "job.scanned" not in report
             # The card coverage and the matching note live in the header, not in

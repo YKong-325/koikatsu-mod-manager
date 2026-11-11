@@ -42,10 +42,9 @@ async function main() {
 
   const report = $('dependencyReport');
   assert.equal(report.hidden, false, 'the outcome survives the re-render that follows');
-  assert.match(report.textContent, /请求 1 个 GUID/);
-  assert.match(report.textContent, /公共索引里找到 0 个/);
-  assert.match(report.textContent, /安装 0 个/);
-  assert.match(report.textContent, /1 个公共索引里没有/);
+  assert.match(report.textContent, /匹配 0 个/);
+  assert.match(report.textContent, /下载 0 个/);
+  assert.match(report.textContent, /没找到的 1 个/, 'the count lives in the fold, not the line');
   assert.match(report.textContent, /absent/, 'the unanswered GUID is listed');
   assert.match(report.textContent, /someone/, 'with the author to search for');
   const summary = report.querySelector('summary');
@@ -62,16 +61,17 @@ async function main() {
       {guid: 'b', file: 'b.zipmod', path: 'b.zipmod', bytes: 1}],
     unmatched: [{guid: 'c', authors: [], websites: [], cards: 2}]};
   await download.onclick();
-  assert.match($('dependencyReport').textContent, /请求 3 个 GUID/);
-  assert.match($('dependencyReport').textContent, /安装 2 个/);
+  assert.match($('dependencyReport').textContent, /匹配 2 个/);
+  assert.match($('dependencyReport').textContent, /下载 2 个/);
   assert.match($('dependencyReport').textContent, /1 个下载失败/);
   assert.match($('dependencyReport').textContent, /guid\.x：连接中断/,
     'the per-package failure reason is shown, not just counted');
 
   /* A round where one GUID is only shipped as a Sunshine build and one is not
-   * in the index at all. The Sunshine build is still downloaded -- the game,
-   * not this program, decides whether it loads -- so the answer has to say it
-   * was installed and why it might not show up, instead of implying a failure. */
+   * in the index at all. The Sunshine build is downloaded all the same -- the
+   * game, not this program, decides whether it loads -- and the answer must not
+   * turn that into a paragraph about manifests: matched and installed are the
+   * two numbers the reader asked for. */
   job = {running: false, stage: '完成', message: '', requested: 2, total: 2,
     matched: 2, done: 2, failed: 0, cursor: 1, error: '', problems: [],
     scanned: 7469, unreadable: 79, updates: [
@@ -82,12 +82,13 @@ async function main() {
     unmatched: [{guid: 'gone', authors: [], websites: [], cards: 1, reason: 'absent'}]};
   await download.onclick();
   const mixed = $('dependencyReport').textContent;
-  assert.match(mixed, /1 个公共索引里没有/, 'only the truly absent one is called absent');
-  assert.match(mixed, /其中 1 个只有 KKS 版/, 'the other game\'s build is counted apart');
-  assert.match(mixed, /已经照样下载/, 'it is downloaded, not withheld');
-  assert.match(mixed, /游戏加载时会按这个标注决定/, 'the game is named as the one who decides');
-  assert.doesNotMatch(mixed, /索引里只有 KKS 版/,
-    'the row is not listed as missing any more, because it was downloaded');
+  assert.match(mixed, /匹配 2 个/, 'a build the other game declares still counts as matched');
+  assert.match(mixed, /下载 1 个/);
+  assert.match(mixed, /没找到的 1 个/, 'only the truly absent one is called absent');
+  assert.doesNotMatch(mixed, /只有 KKS 版|只有另一版本|manifest/,
+    'which game a manifest declares is not spelled out to the reader');
+  assert.doesNotMatch(mixed, /请求 \d+ 个 GUID|按 (KK|KKS) 索引/,
+    'the method (what was asked, which index) is not part of the answer');
   /* How many archives were read belongs to the log, not the page: the answer
    * line stays one line long. */
   assert.doesNotMatch(mixed, /核对了|读不出来/,
@@ -111,9 +112,9 @@ async function main() {
   job = {...job, running: false, stage: '完成'};
   await pending;
 
-  console.log('PASS: a download round reports what it asked for, what the index '
-    + 'held and what it installed, lists the GUIDs it could not answer, and keeps '
-    + 'that answer on screen after the grid is rebuilt');
+  console.log('PASS: a download round answers in one line -- how many packages '
+    + 'matched, how many were downloaded -- and lists the GUIDs it could not '
+    + 'answer, keeping that outcome on screen after the grid is rebuilt');
 }
 
 main().catch(error => {

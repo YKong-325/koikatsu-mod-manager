@@ -136,44 +136,23 @@
     }
   }
 
-  /* "Installed 0" on its own reads like a failed download, when the usual cause
-   * is that the public pack never shipped those packages. Spell out both sides
-   * of the count, then list the ones still missing so they can be searched for
-   * by hand. A GUID can also go unanswered because the only build is a Sunshine
-   * one or because its archive's manifest could not be read, so those are
-   * counted apart -- the coverage line is what makes "not in the pack" a claim
-   * the reader can check instead of a guess. */
+  /* Two numbers, in the order the reader cares about: what the index answered,
+   * what landed in mods. The GUID count that was asked for, which game's index
+   * was used and which build a manifest declares are all method, not outcome --
+   * saying them turned a one-line answer into a paragraph nobody finished.
+   * A failed download is the one reason to look further, so it keeps a suffix;
+   * the GUIDs nothing answered for are counted by the fold right below, which
+   * is where the reader looks for them anyway. */
   function paintReport(job) {
     const installed = (job.updates || []).length;
-    const requested = job.requested || job.total || 0;
     const rejected = job.unmatched || [];
-    /* The pack ships the same mod for both games, and which one is "the other
-     * game" flips with the install. Those builds are downloaded all the same:
-     * the archive belongs to whoever asked for it, and the game -- not this
-     * program -- decides whether it loads. Say so, because the count on its own
-     * would read as "some of these will not work". */
-    const other = job.flavour === 'kks' ? 'kk' : 'kks';
-    const otherLabel = other === 'kk' ? 'KK' : 'KKS';
-    const fallbacks = job.fallbacks || [];
-    const parts = [`请求 ${requested.toLocaleString()} 个 GUID`];
-    if (job.matched !== undefined && job.matched !== null) {
-      parts.push(`公共索引里找到 ${job.matched.toLocaleString()} 个`);
-    }
-    parts.push(`安装 ${installed.toLocaleString()} 个`);
-    if (job.flavour) parts.push(`按 ${job.flavour === 'kks' ? 'KKS' : 'KK'} 索引`);
+    const matched = job.matched === undefined || job.matched === null
+      ? (job.total || 0) : job.matched;
+    const parts = [`匹配 ${matched.toLocaleString()} 个`,
+      `下载 ${installed.toLocaleString()} 个`];
     if (job.failed) parts.push(`${job.failed.toLocaleString()} 个下载失败`);
-    if (rejected.length) parts.push(`${rejected.length.toLocaleString()} 个公共索引里没有`);
-    if (fallbacks.length) {
-      parts.push(`其中 ${fallbacks.length.toLocaleString()} 个只有 ${otherLabel} 版`);
-    }
 
     const children = [el('strong', '上次下载'), el('span', parts.join(' · '))];
-    if (fallbacks.length) {
-      children.push(el('span',
-        `${fallbacks.length.toLocaleString()} 个包只提供了 ${otherLabel} 版（作者在 manifest 里标注的），`
-        + `已经照样下载。游戏加载时会按这个标注决定要不要用它——`
-        + '留在 mods 里不影响现有内容，另有一台机器或准备换版本时可以直接拿过去。', 'notice'));
-    }
     if (job.error) {
       children.push(el('span', job.error, 'notice'));
       // The failure mode that reads as a bug but is not: a browser reaches the
