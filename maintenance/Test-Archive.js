@@ -126,6 +126,13 @@ tick().then(() => {
     // feature, and the folder is configurable.
     assert.match($('archiveList').querySelector('.trash-help').textContent,
       /D:\\Koikatu\\mods_archive/);
+    // Same hint shape as the deletion page: one sentence, then what 取回 does.
+    const hint = $('archiveList').querySelector('.page-hint');
+    assert.ok(hint, 'the archive page explains itself above the list');
+    assert.match(hint.querySelector('.hint-lead').textContent, /一个字节都不改/);
+    assert.equal(hint.querySelectorAll('.hint-key').length, 1);
+    assert.ok(!/archive-log\.jsonl/.test(hint.textContent),
+      'the log filename is an implementation detail, not a user-facing fact');
     assert.match($('archiveCount').textContent, /可取回 1 个/);
 
     /* No destructive control: archiving is a backup, and the page that erases

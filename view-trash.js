@@ -59,12 +59,14 @@
   const element = el('div');
   element.id = 'trashList';
 
-  const HELP = '删除只是把压缩包在原目录改名成 .disabled，文件没有离开硬盘。'
-    + '这里的记录来自服务器删除日志，换标签页或重启管理器后仍然可以恢复。'
-    + '红色的「彻底删除」才会真正移除文件，且无法再通过本工具找回。'
-    + '原件已经不在的那些记录没法恢复，用「清理失效记录」一次性从列表里去掉。';
-
-  const help = el('p', HELP, 'notice trash-help');
+  /* What the page is, then what each button does to a file. The old version was
+     four sentences of the same facts in a row, which nobody reads twice. */
+  const help = KK.hint('停用不是删除：文件还在原处，只改了后缀。', [
+    ['恢复', '改回原名'],
+    ['彻底删除', '真的删掉文件，不可撤销'],
+    ['清理失效记录', '只删日志行，不动文件']
+  ]);
+  help.classList.add('trash-help');
   element.append(help);
 
   const list = el('div', '', 'trash-rows');

@@ -45,7 +45,7 @@
   const element = el('div');
   element.id = 'archiveList';
 
-  const help = el('p', '', 'notice trash-help');
+  let help = el('p', '', 'notice page-hint trash-help');
   element.append(help);
 
   const list = el('div', '', 'trash-rows');
@@ -71,12 +71,15 @@
     return ['可取回', 'ready'];
   }
 
-  function helpText() {
+  /* The folder is a setting, so the sentence naming it is rewritten with the
+     list: a stale path would be worse than no sentence at all. Everything else
+     the old paragraph explained is one line of "button does consequence". */
+  function renderHelp() {
     const where = root ? `「${root}」` : '归档文件夹';
-    return '归档会把压缩包整个移动到 ' + where + '，保留它原来的相对路径，'
-      + '游戏不会再加载它，包内文件也不会被改动。'
-      + '这里的记录来自归档文件夹里的 archive-log.jsonl，'
-      + '「取回」会把文件放回 Mod 目录的原位置。本页不会删除任何文件。';
+    return KK.hint(
+      `归档把整个包移到${where}，游戏不会加载它，包内文件一个字节都不改。`,
+      [['取回', '放回 Mod 目录的原位置']],
+      '本页不会删除任何文件', help);
   }
 
   function updateChrome() {
@@ -115,9 +118,9 @@
 
   function renderRows() {
     list.replaceChildren();
-    help.textContent = helpText();
+    help = renderHelp();
     if (!items.length) {
-      list.append(el('p', '还没有任何归档。在 Mod 页点卡片右上角的 ↓，或勾选后点「归档选中」。',
+      list.append(el('p', '还没有任何归档。在 Mod 页点卡片右上角的归档按钮，或勾选后点「归档选中」。',
         'notice'));
       updateChrome();
       return;

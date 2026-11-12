@@ -383,6 +383,9 @@ def main():
             assert b".delete::before" in theme and b".archive::before" in theme, \
                 "card actions must paint their icons"
             assert b".detection-download{" in style
+            # The hint above the deletion and archive lists is one sentence plus
+            # a row of "button does what", not a paragraph of caveats.
+            assert b".notice.page-hint{" in style and b".hint-key" in style
             # Archiving ships as its own tab beside the deletion list, with the
             # button that moves a package out of the mods tree on every card.
             assert b"view-archive.js" in page, page[:2000]

@@ -31,6 +31,25 @@
     return node;
   }
 
+  /* The line above a long list only gets read once, and in a hurry. A paragraph
+     of caveats buries the three things that matter: what this list is, what each
+     button does to a file, and whether any of it is permanent. So: one sentence,
+     then "<button> does <consequence>" pairs. Both the deleted and the archive
+     page say this kind of thing, hence one shape for both. Pass an existing node
+     as `into` when the sentence depends on data that arrives later (the archive
+     page names a configurable folder). */
+  function hint(lead, entries, note, into) {
+    const box = into || el('p', undefined, 'notice page-hint');
+    box.replaceChildren(el('span', lead, 'hint-lead'));
+    for (const [name, meaning] of entries || []) {
+      const pair = el('span', undefined, 'hint-key');
+      pair.append(el('b', name), el('span', meaning));
+      box.append(pair);
+    }
+    if (note) box.append(el('span', note, 'hint-note'));
+    return box;
+  }
+
   const views = [];
   const modHooks = [];
   const facets = [];
@@ -312,7 +331,7 @@
     onModCard,
     applyModHooks: (record, card, meta) => applyHooks(modHooks, record, card, meta),
     setStatus, getStatus: () => statusText,
-    preserveViewport, el, $, link,
+    preserveViewport, el, $, link, hint,
     search: window.KK_MOD_SEARCH ? window.KK_MOD_SEARCH.create() : null,
     currentView: () => active && active.id
   };
