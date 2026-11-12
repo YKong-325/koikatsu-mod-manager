@@ -5,6 +5,7 @@
  *
  *   KK.registerView({id, label, controls, element, render, go, pageInfo})
  *   KK.registerModFacet({id, label, options, match})   -> extra filter on Mod grid
+ *   KK.registerModTool(paint)                         -> extra control beside them
  *   KK.onModCard(fn)                                  -> card slots for badges
  *   KK.media                                          -> thumbnail loader
  *
@@ -33,6 +34,7 @@
 
   const views = [];
   const modHooks = [];
+  const modTools = [];
   const facets = [];
   const facetSelects = new Map();
   let facetHost = null;   // where the facet selects live, so they can be rebuilt
@@ -218,6 +220,25 @@
 
   function registerModFacet(facet) { facets.push(facet); }
 
+  /* A tool is the other half of a facet: a control that opens something instead
+   * of narrowing the grid. It is repainted with every render because what it
+   * reports -- how many collisions exist -- changes when packages leave the
+   * catalog, and returning null keeps it off the toolbar when it has nothing
+   * to say. */
+  function registerModTool(paint) { modTools.push(paint); }
+
+  function renderModTools(container) {
+    container.replaceChildren();
+    for (const paint of modTools) {
+      try {
+        const node = paint();
+        if (node) container.append(node);
+      } catch (error) {
+        console.warn('mod tool failed', error);
+      }
+    }
+  }
+
   function renderModFacets(container, onChange) {
     // Facets arrive as plugins load, so this is re-runnable: it rebuilds the
     // selects from whatever has registered so far. A facet may also compute its
@@ -309,6 +330,7 @@
     data, deps, api, sessionReady,
     registerView, openView, refreshPager,
     registerModFacet, renderModFacets, refreshModFacets, facetValue, facets,
+    registerModTool, renderModTools,
     onModCard,
     applyModHooks: (record, card, meta) => applyHooks(modHooks, record, card, meta),
     setStatus, getStatus: () => statusText,

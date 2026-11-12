@@ -10,7 +10,7 @@ const {createApp, descendants} = require('./DomShim');
 const {catalog, library, deps} = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'view-archive.js', 'plugin-deps.js'];
+  'view-trash.js', 'view-archive.js', 'plugin-deps.js', 'plugin-conflicts.js'];
 
 const app = createApp({catalog, library, deps});
 const KK = app.load(SCRIPTS);
@@ -23,8 +23,8 @@ const tabs = $('tabs').children.filter(node => node.tagName === 'BUTTON');
 assert.equal(tabs.length, 4, 'one tab per registered view');
 assert.deepEqual(tabs.map(tab => tab.textContent),
   ['Mod', '已删除', '归档', '依赖检查']);
-assert.equal(KK.facets.length, 2,
-  'the plugin answers two questions on the Mod grid: card references and collisions');
+assert.equal(KK.facets.length, 1,
+  'the plugin answers one question on the Mod grid: which cards name this package');
 
 /* --- Mod grid ----------------------------------------------------------- */
 
@@ -39,10 +39,10 @@ const facetSelect = $('modPluginFacets').querySelector('[data-facet="usage"]');
 assert.ok(facetSelect, 'the card-reference facet is rendered into the Mod toolbar');
 assert.equal(facetSelect.children.length, 4,
   'pack040 has no GUID, so "cannot tell" applies');
-/* No two packs in this fixture share a GUID, so the collision facet has no
- * options to offer and must not put an empty dropdown in the toolbar. */
-assert.equal($('modPluginFacets').children.length, 1,
-  'a facet with nothing to offer is not rendered at all');
+/* No two packs in this fixture share a GUID, so the collision door has nothing
+ * to open and must not appear in the toolbar at all. */
+assert.equal($('modPluginTools').children.length, 0,
+  'a tool with nothing to open is not rendered at all');
 
 /* The bars that act on a long list stick to the top of the window while it
  * scrolls, which only works if they hang off #dock rather than a filter row
@@ -154,31 +154,26 @@ assert.match(download.textContent, /下载选中 1 张卡的 1 个 Mod/,
   'pick-all takes the whole current result');
 $('dependencyClearPick').onclick();
 
-/* --- Options that would only ever be empty ------------------------------- */
+/* --- Controls that would only ever be empty ------------------------------ */
 
-// A facet with no answer to give is not drawn, and the collision one appears
+// A door with no answers behind it is not drawn, and the collision one appears
 // again the moment the catalog holds a second copy of a GUID.
 const twin = {...catalog[0], path: 'zz-pack-copy.zipmod'};
 const dupApp = createApp({catalog: [...catalog, twin], library, deps});
 const DUP = dupApp.load(SCRIPTS);
 DUP.openView('mods');
-const conflictSelect = () => dupApp.byId.get('modPluginFacets')
-  .querySelector('[data-facet="conflict"]');
-assert.ok(conflictSelect(), 'a collision puts the filter back in the toolbar');
-assert.equal(conflictSelect().children.length, 2, 'all packages, or only the colliding ones');
-conflictSelect().value = 'only';
-conflictSelect().onchange();
-assert.equal(dupApp.byId.get('grid').children.length, 2,
-  'and it narrows the grid to the pair');
+const conflictDoor = () => dupApp.byId.get('modPluginTools').querySelector('#showGuidClashes');
+assert.ok(conflictDoor(), 'a collision puts the door in the toolbar');
+assert.match(conflictDoor().textContent, /GUID 冲突 1 组（2 个包）/);
 DUP.data.catalog.splice(DUP.data.catalog.length - 1, 1);
-DUP.refreshModFacets();
-assert.equal(conflictSelect(), null,
-  'removing the last collision takes the dropdown away with it');
+DUP.openView('mods').go(0);
+assert.equal(conflictDoor(), null,
+  'removing the last collision takes the door away with it');
 
-console.log('PASS: shell boots every registered view, the collision facet filters '
-  + 'the Mod grid, cards are decorated through hooks, every missing-mod verdict '
-  + 'comes from the shared dependency data, and the batch bar docks above the '
-  + 'scrolling grid');
+console.log('PASS: shell boots every registered view, the collision door on the Mod '
+  + 'grid appears only while a collision exists, cards are decorated through '
+  + 'hooks, every missing-mod verdict comes from the shared dependency data, and '
+  + 'the batch bar docks above the scrolling grid');
 
 /* --- Orphaned tab -------------------------------------------------------- */
 

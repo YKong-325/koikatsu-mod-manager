@@ -301,83 +301,11 @@
     filter.value = state.filter;
   }
 
-  /* Two packages can carry the same GUID. Sideloader then loads only one of
-   * them, silently; which one it keeps is its own rule (highest version, then
-   * longest path), so the manager cannot promise that the copy the user is
-   * looking at is the copy in effect. What it can do is say the collision
-   * exists before the user wonders why a mod does nothing.
-   *
-   * The catalog is the authority here rather than deps.json: deps carries only
-   * a boolean per package, and a banner is more useful when it can say how many
-   * packs share the GUID. Walking 7 000 records once beats rescanning them for
-   * every card on every page.
-   */
-  let guidGroups = null;
-  let guidGroupsCount = -1;
-  function byGuid() {
-    if (guidGroups && guidGroupsCount === data.catalog.length) return guidGroups;
-    guidGroups = new Map();
-    for (const record of data.catalog) {
-      const guid = (record.guid || '').trim().toLowerCase();
-      if (!guid) continue;
-      const rows = guidGroups.get(guid);
-      if (rows) rows.push(record);
-      else guidGroups.set(guid, [record]);
-    }
-    // Deleting a package is the one thing that can end a collision, and it
-    // shortens the catalog, so the length is enough to notice it.
-    guidGroupsCount = data.catalog.length;
-    return guidGroups;
-  }
-
-  function sharesGuid(record) {
-    const guid = (record.guid || '').trim().toLowerCase();
-    if (!guid) return [];
-    return (byGuid().get(guid) || []).filter(other => other.path !== record.path);
-  }
-
-  function guidClashes() {
-    let groups = 0, packs = 0;
-    for (const rows of byGuid().values()) {
-      if (rows.length < 2) continue;
-      groups += 1;
-      packs += rows.length;
-    }
-    return {groups, packs};
-  }
-
-  function conflictBanner(record) {
-    const peers = sharesGuid(record);
-    const others = peers.length === 1 ? '另有 1 个包使用同一 GUID'
-      : peers.length ? `另有 ${peers.length} 个包使用同一 GUID`
-        : '与其他包使用了同一 GUID';
-    const banner = el('div', `GUID 冲突：${others}，游戏只会加载其中一个`,
-      'conflict-flag');
-    const names = peers.map(other => other.file || other.path).filter(Boolean);
-    if (names.length) {
-      banner.title = `同一 GUID 的包：${names.join('、')}。` +
-        '游戏只会加载其中一个，其余被跳过；留下哪个由包内版本号决定，' +
-        '版本相同时按路径长度。停用多余的那个即可消除冲突。';
-    }
-    return banner;
-  }
-
-  /* A collision deserves a filter of its own: the banner explains, the dropdown
-   * finds. It only appears when the catalog actually holds one -- on a clean
-   * install it would be a control with a single, useless answer. */
-  KK.registerModFacet({
-    id: 'conflict',
-    label: 'GUID 冲突',
-    options() {
-      const {groups, packs} = guidClashes();
-      return groups ? [['', '全部包'], ['only', `只看冲突（${packs} 个包）`]] : [];
-    },
-    match(record, value) {
-      if (value !== 'only') return true;
-      const verdict = KK.deps.mod(record.path);
-      return Boolean((verdict && verdict.duplicateGuid) || sharesGuid(record).length);
-    }
-  });
+  /* Two packages can carry the same GUID, and Sideloader silently loads only
+   * one of them -- but that is a fact about the packages on the Mod grid, where
+   * the extra copy is actually disabled, so the banner, the count and the list
+   * behind it live there (see plugin-conflicts.js). This view answers only
+   * "which card still misses what". */
 
   function numbers() {
     const deps = KK.deps.raw;
@@ -392,7 +320,6 @@
       ];
     }
     const {coverage} = deps;
-    const clash = guidClashes();
     // A tick on a card that has since been fixed points at nothing; drop it so
     // the count in the button always matches what will really be downloaded.
     for (const path of [...state.picked]) {
@@ -426,18 +353,6 @@
         `缺失 ${coverage.missing.toLocaleString()} · ` +
         `齐全 ${coverage.complete.toLocaleString()}`, 'notice')
     ];
-    if (clash.groups) {
-      // A count on its own is not actionable: it opens the groups so the user
-      // can see which packages are fighting over the GUID. It reads as a button
-      // rather than a footnote -- an underlined sentence was easy to miss.
-      const link = el('button', undefined, 'clash-count');
-      link.type = 'button';
-      link.title = '查看哪些包共用一个 GUID';
-      link.append(el('span', `GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）`),
-        el('span', '查看 ›', 'clash-go'));
-      link.onclick = showClashes;
-      lines.push(link);
-    }
     return lines;
   }
 
@@ -710,64 +625,8 @@
       });
   }
 
-  /* The summary counts colliding groups; this is the answer to the obvious
-     follow-up. Biggest pile first, then by path inside a group, so the same
-     clash is in the same place every time the dialog opens. */
-  function clashGroups() {
-    const groups = [];
-    for (const [guid, rows] of byGuid()) {
-      if (rows.length < 2) continue;
-      groups.push([guid, rows.slice().sort((a, b) => a.path.localeCompare(b.path))]);
-    }
-    return groups.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
-  }
-
-  /* Same card shape as the Mod grid, scaled down: a cover is what tells two
-     similarly named packs apart, and a collision is exactly the case where the
-     names are similar. */
-  function guidPack(record) {
-    const card = el('article', undefined, 'library-card');
-    const thumb = (record.images || [])[0];
-    if (thumb) card.append(KK.media.thumb(thumb.src, record.name || record.file));
-    else card.append(el('div', '暂无预览', 'empty'));
-    const meta = el('div', undefined, 'libmeta');
-    meta.append(el('div', record.name || record.file, 'name'),
-      el('div', record.path, 'path'),
-      el('div', `${(record.bytes / 1048576).toFixed(1)} MB`, 'count'));
-    card.append(meta);
-    return card;
-  }
-
-  function showClashes() {
-    const groups = clashGroups();
-    const packs = groups.reduce((sum, [, rows]) => sum + rows.length, 0);
-    openDialog(`GUID 冲突 · ${groups.length} 组共 ${packs} 个包`, '共用同一个 GUID 的包');
-    if (!groups.length) {
-      refBody.append(el('p', '现在没有冲突。', 'notice'));
-      return;
-    }
-    refBody.append(el('p', '同一组的包共用一个 GUID，游戏只会加载其中一个。'
-      + '留下哪个由包内的版本号决定，版本相同时按路径长度；停用多余的那个就能消除冲突。',
-      'notice'));
-    const box = el('div', undefined, 'guid-groups');
-    for (const [guid, rows] of groups) {
-      const group = el('section', undefined, 'guid-group');
-      group.append(el('h3', guid, 'guid-key'));
-      for (const row of rows) group.append(guidPack(row));
-      box.append(group);
-    }
-    refBody.append(box);
-  }
-
   KK.onModCard((record, card, meta) => {
     const verdict = KK.deps.mod(record.path);
-    /* A GUID collision is a fact about the package, not about any filter, and
-     * it goes above the package name so it cannot be read as a footnote to it.
-     * This used to hide behind the "card reference" filter, which is why four
-     * colliding packages were invisible on the default view. */
-    if (sharesGuid(record).length || (verdict && verdict.duplicateGuid)) {
-      meta.prepend(conflictBanner(record));
-    }
     if (!verdict) return;
     const state = cardState(record);
     /* Three answers instead of one total: a package worn by one character and

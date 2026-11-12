@@ -103,6 +103,13 @@
   pluginFacets.style.display = 'contents';
   let renderedFacets = -1;
 
+  /* Where a plugin puts a control that opens something rather than filtering
+   * (the GUID-collision list). Repainted on every render: what it reports
+   * changes as packages leave the catalog. */
+  const pluginTools = el('div');
+  pluginTools.id = 'modPluginTools';
+  pluginTools.style.display = 'contents';
+
   const exportButton = el('button', '导出待审清单', 'bulk-action');
   exportButton.id = 'export';
   exportButton.type = 'button';
@@ -168,7 +175,7 @@
   bulkBar.append(bulkCount, pageButton, clearButton, renderButton, archiveButton,
     deleteButton, exportButton, undoButton);
 
-  controls.append(modName, query, facets, slot, image, sort, pluginFacets);
+  controls.append(modName, query, facets, slot, image, sort, pluginTools, pluginFacets);
 
   const element = el('main');
   element.id = 'grid';
@@ -455,6 +462,7 @@
       renderedFacets = KK.facets.length;
       KK.renderModFacets(pluginFacets, () => apply());
     }
+    KK.renderModTools(pluginTools);
     const pages = Math.max(1, Math.ceil(filtered.length / SIZE));
     page = Math.min(page, pages - 1);
     statusLine();

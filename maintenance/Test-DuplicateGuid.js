@@ -11,9 +11,7 @@ const {createApp} = require('./DomShim');
 const Fixture = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'plugin-deps.js'];
-
-const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  'view-trash.js', 'plugin-deps.js', 'plugin-conflicts.js'];
 
 const catalog = Fixture.catalog.map(record => ({...record}));
 const mine = catalog[0];
@@ -42,9 +40,10 @@ KK.openView('mods');
 const banner = cardFor(mine.path).querySelector('.conflict-flag');
 assert.ok(banner, 'a collision is visible without touching any filter');
 assert.equal(banner.textContent,
-  'GUID 冲突：另有 1 个包使用同一 GUID，游戏只会加载其中一个');
-assert.match(banner.title, new RegExp(escape(twin.file)),
-  'the tooltip names the package it collides with');
+  'GUID 冲突：另有 1 个包使用同一 GUID，游戏只会加载其中一个 · 查看 ›',
+  'the banner says what is wrong and that it opens something');
+assert.equal(banner.title, '查看这 2 个包',
+  'the banner is a door to the packs that share the GUID, not a dead tooltip');
 assert.ok(cardFor(twin.path).querySelector('.conflict-flag'),
   'both sides of the collision are marked, not just one');
 assert.ok(!cardFor(catalog[2].path).querySelector('.conflict-flag'),
@@ -52,33 +51,20 @@ assert.ok(!cardFor(catalog[2].path).querySelector('.conflict-flag'),
 
 /* --- Finding them ------------------------------------------------------- */
 
-const facet = $('modPluginFacets').querySelector('[data-facet="conflict"]');
-assert.ok(facet, 'the toolbar offers a collision filter once one exists');
-assert.equal(facet.children.length, 2, 'all packages, or only the colliding ones');
-assert.match(facet.children[1].textContent, /只看冲突（2 个包）/);
+// A dropdown that says "all packages / only the colliding ones" was a second
+// way to ask what the banner already answered, so it is gone: the count in the
+// toolbar opens the packs themselves.
+assert.equal($('modPluginFacets').querySelector('[data-facet="conflict"]'), null,
+  'the collision dropdown is retired');
+assert.equal(KK.facets.length, 1, 'only the card-reference facet is left');
 
-facet.value = 'only';
-facet.onchange();
-assert.equal($('grid').children.length, 2,
-  'the filter narrows the grid to the colliding pair');
-assert.match($('status').textContent, /2 个匹配/);
+const door = $('modPluginTools').querySelector('#showGuidClashes');
+assert.ok(door, 'the toolbar carries the way into the colliding packages');
+assert.match(door.textContent, /GUID 冲突 1 组（2 个包）/,
+  'the door counts the collisions the catalog holds');
 
-facet.value = '';
-facet.onchange();
-assert.equal($('grid').children.length, 36, 'clearing it brings the page back');
-
-/* --- The dependency view ------------------------------------------------ */
-
-KK.openView('deps');
-const clash = $('dependencySummary').querySelector('.clash-count');
-assert.ok(clash, 'the collision count is a control, not a dead label');
-assert.match(clash.textContent, /GUID 冲突 1 组（2 个包）/,
-  'the header says how many collisions the catalog holds');
-
-/* Pressing it has to answer "which packages?", the only question the count
-   raises. Until this existed the number sat in the header and led nowhere. */
-clash.onclick();
-const clashDialog = app.document.body.querySelector('.card-refs');
+door.onclick();
+const clashDialog = app.byId.get('guidClashDialog');
 assert.equal(clashDialog.open, true, 'the count opens the colliding packages');
 const groups = clashDialog.querySelectorAll('.guid-group');
 assert.equal(groups.length, 1, 'one block per colliding GUID');
@@ -94,6 +80,20 @@ assert.deepEqual(
 // rows are cards, not lines of text.
 assert.ok(packs[0].children.length > 1, 'each package is shown with its preview, not just text');
 
-console.log('PASS: duplicate GUIDs are marked on the Mod grid without a filter, '
-  + 'name the package they collide with, can be filtered to, and are counted '
-  + 'in the dependency header where the count opens the packages behind it');
+/* The banner is the door on the card itself: clicking the one on a colliding
+   card opens that GUID's group instead of the whole list. */
+cardFor(mine.path).querySelector('.conflict-flag').onclick();
+assert.equal(clashDialog.open, true);
+assert.match(clashDialog.querySelector('h2').textContent, /2 个包共用这个 GUID/,
+  'the card opens its own group, not the whole list');
+
+/* --- The dependency view ------------------------------------------------ */
+
+KK.openView('deps');
+const summary = $('dependencySummary');
+assert.equal(summary.querySelector('.conflict-open'), null,
+  'the collision count is no longer part of the dependency header');
+
+console.log('PASS: duplicate GUIDs are marked on the Mod grid, the card banner and '
+  + 'the toolbar door both open the colliding packages as cards, and the '
+  + 'dependency view no longer reports on collisions');

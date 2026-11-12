@@ -322,13 +322,20 @@ def main():
             # method, not an answer, and it was taken off the page.
             assert "依赖已识别" in report
             assert "本体物品清单" not in report
-            # A collision count nobody can open is the same as no information:
-            # the header line has to be a control that lists the packages.
-            assert "clash-count" in report and "function showClashes" in report
-            assert "guid-group" in report and "guid-key" in report
+            # A collision count nobody can open is no information, and the
+            # collisions themselves belong to the Mod grid now: the packages
+            # sharing a GUID are listed where the spare copy gets disabled.
+            assert "冲突" not in report and "clash-count" not in report
+            assert b"plugin-conflicts.js" in page, \
+                "the shell must load the collision list"
+            conflicts = get("/plugin-conflicts.js").decode("utf-8")
+            assert "GUID 冲突" in conflicts and "function showClashes" in conflicts
+            assert "guid-group" in conflicts and "guid-key" in conflicts
+            # The door on the Mod toolbar appears only while a collision exists.
+            assert "registerModTool" in conflicts and "conflict-open" in conflicts
             # Colliding packages are drawn as cards with their covers, like the
             # Mod grid: a cover is what tells two similar names apart.
-            assert "KK.media.thumb(thumb.src" in report
+            assert "KK.media.thumb(thumb.src" in conflicts
             assert b"triangle-alert.svg" in get("/manager.css")
             assert get("/assets/icons/triangle-alert.svg"), \
                 "the collision button needs its icon"
@@ -347,9 +354,13 @@ def main():
             # Each of those lines opens the cards behind it, so both the dialog
             # and the one query that fills it have to be in the shipped script.
             assert "card-refs" in report and "/api/library/cards" in report
-            # The collision facet sits next to it, and is still offered
-            # dynamically -- an option nothing can be in is not drawn.
-            assert "id: 'conflict'" in report
+            # The collision door is not a facet any more: it opens a list in
+            # place instead of narrowing the grid, so the grid keeps a single
+            # dropdown (card references) and view-mods ships the tool slot that
+            # the collision plugin paints into.
+            assert "id: 'conflict'" not in report
+            assert "renderModTools" in get("/app-core.js").decode("utf-8")
+            assert "modPluginTools" in get("/view-mods.js").decode("utf-8")
             # The render control is the one red bulk action on the grid.
             assert b"bulk-render" in get("/view-mods.js")
             # A sweep that reaches the viewport edge keeps scrolling instead of
