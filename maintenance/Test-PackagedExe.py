@@ -318,9 +318,14 @@ def main():
             assert "job.flavour" not in report.split("function paintReport")[1].split("function fetchMissing")[0]
             assert "核对了 " not in report and "unreadable" not in report
             assert "job.scanned" not in report
-            # The card coverage and the matching note live in the header, not in
-            # the download answer.
-            assert "依赖已识别" in report and "本体物品清单" in report
+            # The card coverage lives in the header; how a GUID gets matched is
+            # method, not an answer, and it was taken off the page.
+            assert "依赖已识别" in report
+            assert "本体物品清单" not in report
+            # A collision count nobody can open is the same as no information:
+            # the header line has to be a control that lists the packages.
+            assert "clash-count" in report and "function showClashes" in report
+            assert "guid-group" in report and "guid-pack" in report
             # "Which packages no card refers to" belongs to the Mod grid, where a
             # package is actually disabled. The dependency view answers only
             # "which card is missing what", so its second mode is gone while the

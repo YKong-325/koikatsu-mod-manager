@@ -70,9 +70,27 @@ assert.equal($('grid').children.length, 36, 'clearing it brings the page back');
 /* --- The dependency view ------------------------------------------------ */
 
 KK.openView('deps');
-assert.match($('dependencySummary').textContent, /GUID 冲突 1 组（2 个包）/,
+const clash = $('dependencySummary').querySelector('.clash-count');
+assert.ok(clash, 'the collision count is a control, not a dead label');
+assert.match(clash.textContent, /GUID 冲突 1 组（2 个包）/,
   'the header says how many collisions the catalog holds');
+
+/* Pressing it has to answer "which packages?", the only question the count
+   raises. Until this existed the number sat in the header and led nowhere. */
+clash.onclick();
+const clashDialog = app.document.body.querySelector('.card-refs');
+assert.equal(clashDialog.open, true, 'the count opens the colliding packages');
+const groups = clashDialog.querySelectorAll('.guid-group');
+assert.equal(groups.length, 1, 'one block per colliding GUID');
+assert.equal(groups[0].querySelector('.guid-key').textContent, mine.guid.toLowerCase(),
+  'the block names the GUID the packages share');
+const packs = groups[0].querySelectorAll('.guid-pack');
+assert.equal(packs.length, 2, 'both sides of the collision are listed, not just one');
+assert.deepEqual(
+  Array.from(packs).map(node => node.querySelector('.path').textContent).sort(),
+  [mine.path, twin.path].sort(),
+  'the two packages listed are the two that collide');
 
 console.log('PASS: duplicate GUIDs are marked on the Mod grid without a filter, '
   + 'name the package they collide with, can be filtered to, and are counted '
-  + 'in the dependency header');
+  + 'in the dependency header where the count opens the packages behind it');

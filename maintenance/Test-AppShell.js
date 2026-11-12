@@ -117,8 +117,8 @@ assert.match($('dependencySummary').textContent, /角色卡 2/,
   'the header opens with the card count');
 assert.match($('dependencySummary').textContent, /依赖已识别/,
   'and still carries the card coverage');
-assert.match($('dependencySummary').textContent, /本体物品清单/,
-  'plus the note saying how a GUID is matched');
+assert.ok(!/本体物品清单/.test($('dependencySummary').textContent),
+  'how a GUID is matched is method, not something the reader needs');
 assert.equal($('dependencyControls').children.length, 3,
   'type, state and search -- the "which mods are unused" switch is gone');
 const download = $('downloadMissing');

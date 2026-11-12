@@ -427,10 +427,15 @@
         `齐全 ${coverage.complete.toLocaleString()}`, 'notice')
     ];
     if (clash.groups) {
-      lines.push(el('span', `GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）`, 'notice'));
+      // A count on its own is not actionable: it opens the groups so the user
+      // can see which packages are fighting over the GUID.
+      const link = el('button', `GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）`,
+        'clash-count');
+      link.type = 'button';
+      link.title = '查看哪些包共用一个 GUID';
+      link.onclick = showClashes;
+      lines.push(link);
     }
-    lines.push(el('span',
-      '缺失结果按包 GUID 与本体物品清单匹配；依赖未识别的卡片不计为缺失或齐全。', 'notice'));
     return lines;
   }
 
@@ -637,6 +642,17 @@
     if (typeof refDialog.close === 'function') refDialog.close();
     else refDialog.open = false;
   }
+
+  /* One dialog, two payloads: which cards wear this package, and which packages
+     share a GUID. Both answer a single follow-up question and get closed again,
+     so they share the frame instead of duplicating it. */
+  function openDialog(title, label) {
+    refTitle.textContent = title;
+    refDialog.setAttribute('aria-label', label);
+    refBody.replaceChildren();
+    if (typeof refDialog.showModal === 'function') refDialog.showModal();
+    else refDialog.open = true;
+  }
   refClose.onclick = closeReferences;
   refDialog.addEventListener('click', event => {
     if (event.target !== refDialog) return;
@@ -677,10 +693,9 @@
 
   function showReferences(record, kind, count) {
     const ticket = ++refRequest;
-    refTitle.textContent = `被 ${count} 张${kind}引用 · ${record.name || record.path}`;
-    refBody.replaceChildren(el('p', '正在读取卡片…', 'notice'));
-    if (typeof refDialog.showModal === 'function') refDialog.showModal();
-    else refDialog.open = true;
+    openDialog(`被 ${count} 张${kind}引用 · ${record.name || record.path}`,
+      '引用这个 Mod 的卡片');
+    refBody.append(el('p', '正在读取卡片…', 'notice'));
     const endpoint = `/api/library/cards?mod=${encodeURIComponent(record.path)}`
       + `&kind=${REF_KINDS[kind]}`;
     /* Two counts pressed in a row must not let the first answer paint over the
@@ -691,6 +706,48 @@
         if (ticket !== refRequest) return;
         refBody.replaceChildren(el('p', '卡片读取失败：' + error.message, 'notice'));
       });
+  }
+
+  /* The summary counts colliding groups; this is the answer to the obvious
+     follow-up. Biggest pile first, then by path inside a group, so the same
+     clash is in the same place every time the dialog opens. */
+  function clashGroups() {
+    const groups = [];
+    for (const [guid, rows] of byGuid()) {
+      if (rows.length < 2) continue;
+      groups.push([guid, rows.slice().sort((a, b) => a.path.localeCompare(b.path))]);
+    }
+    return groups.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  }
+
+  function guidPack(record) {
+    const line = el('div', undefined, 'guid-pack');
+    const main = el('div', undefined, 'guid-pack-main');
+    main.append(el('div', record.name || record.file, 'name'),
+      el('div', record.path, 'path'));
+    line.append(main, el('div', `${(record.bytes / 1048576).toFixed(1)} MB`, 'size'));
+    return line;
+  }
+
+  function showClashes() {
+    const groups = clashGroups();
+    const packs = groups.reduce((sum, [, rows]) => sum + rows.length, 0);
+    openDialog(`GUID 冲突 · ${groups.length} 组共 ${packs} 个包`, '共用同一个 GUID 的包');
+    if (!groups.length) {
+      refBody.append(el('p', '现在没有冲突。', 'notice'));
+      return;
+    }
+    refBody.append(el('p', '同一组的包共用一个 GUID，游戏只会加载其中一个。'
+      + '留下哪个由包内的版本号决定，版本相同时按路径长度；停用多余的那个就能消除冲突。',
+      'notice'));
+    const box = el('div', undefined, 'guid-groups');
+    for (const [guid, rows] of groups) {
+      const group = el('section', undefined, 'guid-group');
+      group.append(el('h3', guid, 'guid-key'));
+      for (const row of rows) group.append(guidPack(row));
+      box.append(group);
+    }
+    refBody.append(box);
   }
 
   KK.onModCard((record, card, meta) => {
