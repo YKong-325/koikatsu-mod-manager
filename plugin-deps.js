@@ -613,6 +613,86 @@
     match(record, value) { return cardState(record) === value; }
   });
 
+  /* "被 4 张服装卡引用" is an answer with a follow-up question attached: which
+   * four? Clicking the line opens them with their thumbnails, so a package can
+   * be judged from the grid instead of switching views and searching for the
+   * card by hand. The dependency data already names the paths; the server turns
+   * a path list into the handful of fields this list draws. */
+  const REF_KINDS = {'角色卡': 'cards', '服装卡': 'outfits', '场景卡': 'scenes'};
+
+  const refDialog = el('dialog');
+  refDialog.className = 'card-refs';
+  refDialog.setAttribute('aria-label', '引用这个 Mod 的卡片');
+  const refHead = el('header');
+  const refTitle = el('h2');
+  const refClose = el('button', '×');
+  refClose.type = 'button'; refClose.title = '关闭';
+  refClose.setAttribute('aria-label', '关闭');
+  refHead.append(refTitle, refClose);
+  const refBody = el('div', undefined, 'card-refs-body');
+  refDialog.append(refHead, refBody);
+  document.body.append(refDialog);
+
+  function closeReferences() {
+    if (typeof refDialog.close === 'function') refDialog.close();
+    else refDialog.open = false;
+  }
+  refClose.onclick = closeReferences;
+  refDialog.addEventListener('click', event => {
+    if (event.target !== refDialog) return;
+    const box = refDialog.getBoundingClientRect();
+    if (event.clientX < box.left || event.clientX > box.right ||
+        event.clientY < box.top || event.clientY > box.bottom) closeReferences();
+  });
+
+  function refRow(row) {
+    const card = el('article', undefined, 'library-card');
+    if (row.thumb) card.append(KK.media.thumb(row.thumb, row.file));
+    else card.append(el('div', '暂无缩略图', 'empty'));
+    const meta = el('div', undefined, 'libmeta');
+    meta.append(el('div', row.file || row.path, 'name'),
+      el('div', row.path, 'path'));
+    card.append(meta);
+    return card;
+  }
+
+  function paintReferences(answer) {
+    const rows = answer.cards || [];
+    refBody.replaceChildren();
+    if (!rows.length) {
+      refBody.append(el('p', '这些卡片已经不在资源卡目录里了。', 'notice'));
+      return;
+    }
+    const list = el('div', undefined, 'card-refs-list');
+    for (const row of rows) list.append(refRow(row));
+    refBody.append(list);
+    const total = answer.total || rows.length;
+    if (rows.length < total) {
+      refBody.append(el('p', `另有 ${(total - rows.length).toLocaleString()} 张卡片不在资源卡目录里。`,
+        'notice'));
+    }
+  }
+
+  let refRequest = 0;
+
+  function showReferences(record, kind, count) {
+    const ticket = ++refRequest;
+    refTitle.textContent = `被 ${count} 张${kind}引用 · ${record.name || record.path}`;
+    refBody.replaceChildren(el('p', '正在读取卡片…', 'notice'));
+    if (typeof refDialog.showModal === 'function') refDialog.showModal();
+    else refDialog.open = true;
+    const endpoint = `/api/library/cards?mod=${encodeURIComponent(record.path)}`
+      + `&kind=${REF_KINDS[kind]}`;
+    /* Two counts pressed in a row must not let the first answer paint over the
+     * second list; only the latest request is allowed to fill the dialog. */
+    return KK.api.read(endpoint)
+      .then(answer => { if (ticket === refRequest) paintReferences(answer); })
+      .catch(error => {
+        if (ticket !== refRequest) return;
+        refBody.replaceChildren(el('p', '卡片读取失败：' + error.message, 'notice'));
+      });
+  }
+
   KK.onModCard((record, card, meta) => {
     const verdict = KK.deps.mod(record.path);
     /* A GUID collision is a fact about the package, not about any filter, and
@@ -634,7 +714,13 @@
       ['场景卡', refs.scenes]].filter(([, count]) => count);
     if (counts.length) {
       const box = el('div', undefined, 'reference-counts installed');
-      for (const [kind, count] of counts) box.append(el('div', `被 ${count} 张${kind}引用`));
+      for (const [kind, count] of counts) {
+        const link = el('button', `被 ${count} 张${kind}引用`, 'ref-count');
+        link.type = 'button';
+        link.title = `查看这 ${count} 张${kind}`;
+        link.onclick = () => showReferences(record, kind, count);
+        box.append(link);
+      }
       meta.append(box);
     } else if (state === 'unmatched') {
       meta.append(el('div', '未被任何卡片引用', 'detection-label duplicate'));

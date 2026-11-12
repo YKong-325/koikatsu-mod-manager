@@ -328,6 +328,9 @@ def main():
             # Each card states it per kind -- character cards, outfit cards and
             # scenes are counted apart, on the default view.
             assert "张${kind}引用" in report and "reference-counts" in report
+            # Each of those lines opens the cards behind it, so both the dialog
+            # and the one query that fills it have to be in the shipped script.
+            assert "card-refs" in report and "/api/library/cards" in report
             # The collision facet sits next to it, and is still offered
             # dynamically -- an option nothing can be in is not drawn.
             assert "id: 'conflict'" in report

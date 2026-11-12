@@ -20,7 +20,7 @@
   nav.append(previous, count, next); viewer.append(heading, image, nav);
   document.body.append(viewer);
   let images = [], current = 0;
-  function show() {
+  function showImage() {
     const entry = images[current];
     image.src = entry.src; image.alt = title.textContent = entry.name;
     count.textContent = `${current + 1} / ${images.length}`;
@@ -36,11 +36,11 @@
     images = siblings.map(item => ({
       src: item.href || item.src, name: item.querySelector('img')?.alt || item.alt || '预览'
     }));
-    current = siblings.indexOf(target); show(); viewer.showModal();
+    current = siblings.indexOf(target); showImage(); viewer.showModal();
   });
   close.onclick = () => viewer.close();
-  previous.onclick = () => { if (current > 0) { current--; show(); } };
-  next.onclick = () => { if (current + 1 < images.length) { current++; show(); } };
+  previous.onclick = () => { if (current > 0) { current--; showImage(); } };
+  next.onclick = () => { if (current + 1 < images.length) { current++; showImage(); } };
   viewer.addEventListener('keydown', event => {
     if (event.key === 'ArrowLeft') { event.preventDefault(); previous.onclick(); }
     if (event.key === 'ArrowRight') { event.preventDefault(); next.onclick(); }
@@ -118,7 +118,10 @@
       Math.max(MARGIN, height - panel.height - MARGIN))) + 'px';
   }
 
-  function show(node) {
+  /* Named apart from the viewer's show(): two declarations would shadow each
+   * other, and the click handler was calling this one with no node, which threw
+   * and left the full-size viewer unopened. */
+  function showZoom(node) {
     const source = node.getAttribute('href') || node.getAttribute('src');
     if (!source) return;
     tipPicture.src = source;
@@ -135,7 +138,7 @@
     clearTimeout(timer);
     anchor = node;
     pointer = {x: event.clientX || 0, y: event.clientY || 0};
-    timer = setTimeout(() => show(node), DELAY);
+    timer = setTimeout(() => showZoom(node), DELAY);
   });
   document.addEventListener('mouseout', event => {
     const node = cover(event.target);

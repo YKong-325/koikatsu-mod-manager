@@ -15,6 +15,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import urlencode
 import msgpack
 from PIL import Image
 
@@ -146,6 +147,34 @@ def main():
                 dependencies = json.load(response)
             assert set(dependencies) == {"cards", "mods", "coverage", "coverageByKind", "summary"}
             assert dependencies["coverage"]["total"] == 2
+            # The "referenced by N" lines on a Mod card are buttons, and the
+            # list behind one is a single query keyed by package path and kind:
+            # sending a thousand card paths back would not fit in a URL.
+            with urllib.request.urlopen(base + "/api/library") as response:
+                card_rows = json.load(response)
+            ref_mod, ref_verdict = next(
+                (path, entry) for path, entry in dependencies["mods"].items()
+                if entry.get("cards"))
+            query = urlencode({"mod": ref_mod, "kind": "cards"})
+            with urllib.request.urlopen(base + "/api/library/cards?" + query) as response:
+                answer = json.load(response)
+            assert answer["total"] == len(ref_verdict["cards"])
+            assert {row["path"] for row in answer["cards"]} == set(ref_verdict["cards"])
+            assert all(set(row) == {"path", "file", "kind", "thumb"}
+                       for row in answer["cards"]), "only the fields the list draws"
+            assert {row["path"] for row in answer["cards"]} <= \
+                {row["path"] for row in card_rows}
+            try:
+                urllib.request.urlopen(base + "/api/library/cards")
+                raise AssertionError("A missing package path was accepted")
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 400
+            try:
+                urllib.request.urlopen(base + "/api/library/cards?" + urlencode(
+                    {"mod": ref_mod, "kind": "maps"}))
+                raise AssertionError("An unknown card kind was accepted")
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 400
             assert (catalog / "deps.js").is_file() and (catalog / "deps.json").is_file()
             assert b"window.KK_DEPS=" in (catalog / "deps.js").read_bytes()
             assert post("/api/delete", {"path": record["path"]}, False)[0] == 403

@@ -26,7 +26,7 @@ import webbrowser
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, unquote_plus, urlparse
 from AppPaths import APP_ROOT as DATA_ROOT, RESOURCE_ROOT
 from BrowserOpen import open_url
 
@@ -164,6 +164,9 @@ class CatalogHandler(SimpleHTTPRequestHandler):
         elif endpoint == "/api/library":
             with self.server.mutation_lock:
                 self._json(200, self._read_library())
+        elif endpoint == "/api/library/cards":
+            with self.server.mutation_lock:
+                self._referencing_cards()
         elif endpoint == "/api/deps":
             with self.server.mutation_lock:
                 self._json(200, self._dependencies())
@@ -195,10 +198,16 @@ class CatalogHandler(SimpleHTTPRequestHandler):
         return cursor
 
     def _query(self, name):
+        """One query argument, decoded as form data.
+
+        Paths carry spaces, so ``+`` has to become a space: a caller that
+        builds the query with urlencode (or a browser that does the same) would
+        otherwise send a package path nothing can match.
+        """
         prefix = name + "="
         for part in urlparse(self.path).query.split("&"):
             if part.startswith(prefix):
-                return unquote(part[len(prefix):])
+                return unquote_plus(part[len(prefix):])
         return ""
 
     def _json(self, status, payload):
@@ -1057,6 +1066,34 @@ class CatalogHandler(SimpleHTTPRequestHandler):
             cached = library_builder.dependencies(records, self._read_library())
             self.server.deps_cache = cached
         return cached
+
+    def _referencing_cards(self):
+        """The cards behind a "referenced by N" line on a Mod card.
+
+        The dependency data already says which paths name a package; the library
+        holds the thumbnails that make those paths recognisable. Only the fields
+        the list draws are sent back -- a thousand card records with their full
+        reference lists would be larger than the answer is worth.
+        """
+        mod = self._query("mod")
+        kind = self._query("kind") or "cards"
+        if not mod:
+            self._json(400, {"error": "缺少 mod 参数"})
+            return
+        if kind not in {"cards", "outfits", "scenes"}:
+            self._json(400, {"error": "未知的资源类型"})
+            return
+        entry = (self._dependencies().get("mods") or {}).get(mod) or {}
+        paths = entry.get(kind) or []
+        if not paths:
+            self._json(200, {"total": 0, "cards": []})
+            return
+        wanted = set(paths)
+        rows = [{"path": row.get("path"), "file": row.get("file"),
+                 "kind": row.get("kind"), "thumb": row.get("thumb")}
+                for row in self._read_library() if row.get("path") in wanted]
+        rows.sort(key=lambda row: row.get("path") or "")
+        self._json(200, {"total": len(paths), "cards": rows})
 
     def _mod_classification(self, data):
         relative, classification = data.get("path"), data.get("classification")

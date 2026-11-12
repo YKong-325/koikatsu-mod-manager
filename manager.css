@@ -63,6 +63,33 @@ body.marquee-active{user-select:none;cursor:crosshair}
 /* One line per kind of card that names this package. Kept small and tight, so
  * a well-used package does not grow three headlines taller than its cover. */
 .reference-counts{margin-top:8px;font-size:12px;line-height:1.45}
+/* Each line opens the cards behind it, so it has to look like something to
+ * press without turning three rows into blue links: the dotted underline is
+ * the affordance, the text stays the same colour as the count it replaces. */
+.reference-counts .ref-count{display:block;width:100%;padding:0;border:0;background:none;
+  color:inherit;font:inherit;line-height:1.45;text-align:left;cursor:pointer;
+  text-decoration:underline dotted #a9c3cc;text-underline-offset:3px}
+.reference-counts .ref-count:hover{color:#175a89;text-decoration:underline solid #175a89}
+.reference-counts .ref-count:focus-visible{outline:2px solid #58a6c8;outline-offset:2px}
+/* The card list behind a reference count: same thumbnails as the dependency
+ * view, one row each, so a name or a face is enough to place the card. */
+.card-refs{padding:0;width:min(720px,94vw);max-height:84vh;border:1px solid #bfd6de;
+  border-radius:6px;background:#f3f7f9;color:var(--ink)}
+.card-refs::backdrop{background:#172930bc}
+.card-refs header{display:flex;align-items:center;gap:12px;padding:10px 14px;
+  border-bottom:1px solid #d8dde2}
+.card-refs h2{margin:0;flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
+.card-refs header button{width:34px;min-height:34px;padding:4px;font-size:19px}
+.card-refs-body{overflow:auto;max-height:calc(84vh - 56px);padding:10px 14px 14px}
+.card-refs-list{display:flex;flex-direction:column;gap:8px}
+.card-refs .library-card{display:flex;align-items:center;gap:12px;padding:6px;
+  border:0;border-top:0;border-radius:4px;background:#fff;box-shadow:none;transform:none}
+.card-refs .library-card:hover{background:#eaf3f5;transform:none}
+.card-refs .library-card > img{width:84px;height:84px;flex:none;object-fit:contain;
+  background:#edf5f7;cursor:zoom-in}
+.card-refs .library-card .empty{width:84px;height:84px;flex:none;font-size:11px}
+.card-refs .libmeta{padding:0;min-width:0}
+.card-refs .name{padding-right:0}
 /* A GUID collision is decided by the game, not by the manager, but both packs
    stay installed: the card has to say so above the package name, where the
    "why is this mod doing nothing" question starts. The title attribute names
