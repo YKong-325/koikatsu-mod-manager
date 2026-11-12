@@ -136,8 +136,12 @@ def main():
             setup = get("/settings").decode("utf-8")
             assert "保存并建立索引" in setup
             # The delete log is shown read-only: moving it would orphan history.
-            assert "删除记录" in setup and "卡片回收" not in setup
+            # The archive folder beside it is editable, because the files really
+            # live there and its own log travels with it.
+            assert "删除与归档" in setup and "卡片回收" not in setup
             assert 'id="modtrash" type="text" readonly' in setup
+            assert 'id="archive" type="text"' in setup
+            assert "mods_archive" in get("/settings-ui.js").decode("utf-8")
             assert "UserData_trash" not in get("/settings-ui.js").decode("utf-8")
             assert b"startupStatus" in get("/startup")
             assert b"/api/shutdown" in get("/browser-ui.js")
@@ -226,6 +230,7 @@ def main():
                 "userdata": str(game / "UserData"), "chara": str(cards),
                 "coordinate": str(outfits), "studio": str(scenes),
                 "modtrash": str(game / "modtrash"),
+                "archive": str(game / "mods_archive"),
             }
             assert post("/api/config", values)["ok"]
             token = json.loads(get("/api/session"))["token"]
@@ -370,6 +375,14 @@ def main():
             assert b"trash-2.svg" in theme and get("/assets/icons/trash-2.svg"), \
                 "the deleted tab needs its icon"
             assert b".detection-download{" in style
+            # Archiving ships as its own tab beside the deletion list, with the
+            # button that moves a package out of the mods tree on every card.
+            assert b"view-archive.js" in page, page[:2000]
+            assert b".archive {" in theme and b".archive-row{" in style
+            archive_js = get("/view-archive.js").decode("utf-8")
+            assert "/api/archives" in archive_js and "/api/unarchive" in archive_js
+            # The page is a backup screen: it must never offer an erase.
+            assert "trash-purge" not in archive_js and "trash-danger" not in archive_js
             # A page can outlive the process that served it. Saying so is part of
             # the shipped UI: the banner style and the wording must both travel.
             assert b".offline-banner{" in style
@@ -458,6 +471,32 @@ def main():
             assert wiped["purged"] == 1, wiped
             assert not doomed_disabled.exists()
             assert (mods / "sample.zipmod").is_file(), "purge must not touch live archives"
+            # Archiving is the move: the package leaves the mods tree, keeps
+            # every byte, and the folder is created on first use.
+            sample_bytes = (mods / "sample.zipmod").read_bytes()
+            assert not (game / "mods_archive").exists(), \
+                "an unused archive folder must not be created at startup"
+            archived = post("/api/archive", {"path": "sample.zipmod"})
+            assert archived["count"] == 1, archived
+            assert archived["archiveRoot"] == str(game / "mods_archive")
+            assert not (mods / "sample.zipmod").exists(), "the file must leave mods"
+            kept_copy = game / "mods_archive" / "sample.zipmod"
+            assert kept_copy.read_bytes() == sample_bytes, "moved byte for byte"
+            listed_archives = json.loads(get("/api/archives"))
+            assert listed_archives["pending"] == 1, listed_archives
+            assert listed_archives["archiveRoot"] == str(game / "mods_archive")
+            back_again = post("/api/unarchive", {"ids": archived["ids"]})
+            assert back_again["count"] == 1, back_again
+            assert (mods / "sample.zipmod").read_bytes() == sample_bytes
+            assert not kept_copy.exists()
+            # An archive folder inside mods would hand the package back to the
+            # game, so the settings refuse it outright.
+            try:
+                post("/api/config", dict(values, archive=str(mods / "archived")))
+                raise AssertionError("an archive folder inside mods was accepted")
+            except urllib.error.HTTPError as error:
+                assert error.code == 400, error.code
+            assert (mods / "sample.zipmod").is_file()
             assert all(row["id"] != doomed["id"]
                        for row in json.loads(get("/api/deletions"))["items"])
             # Without the token the endpoint must not erase anything at all.
@@ -519,8 +558,8 @@ def main():
                     "images"][0]["source"] == "mesh-render"
             stop()
             print("PASS: portable EXE, Unicode path, setup, assets, indexing, card-Mod "
-                  "association, batch delete/restore, repeat launch, restart, "
-                  "authenticated shutdown")
+                  "association, batch delete/restore, archive out of the mods tree and "
+                  "back, repeat launch, restart, authenticated shutdown")
             if args.open_browser:
                 print("PASS: real browser page requests on initial and repeat EXE launch")
         finally:

@@ -3,7 +3,10 @@
   // "modtrash" is the folder that holds delete-log.jsonl. Deleting a Mod only
   // renames it in place, so the folder is no longer a place files go and the
   // form shows it read-only: moving it would orphan the restore history.
-  const fields = ['game', 'mods', 'chara', 'coordinate', 'studio', 'modtrash'];
+  // "archive" is the opposite: it does hold the moved packages, and its log
+  // lives inside it, so it can be pointed anywhere the game does not scan.
+  const fields = ['game', 'mods', 'chara', 'coordinate', 'studio', 'modtrash',
+    'archive'];
   const optional = ['chara', 'coordinate', 'studio'];
   let token = '', busy = true, userdata = '', loadedGame = '';
   function status(message, error = false) {
@@ -39,6 +42,7 @@
       $('enable-' + key).checked = true;
     });
     $('modtrash').value = join('modtrash');
+    $('archive').value = join('mods_archive');
     updateControls();
   }
   $('defaults').onclick = fillDefaults;

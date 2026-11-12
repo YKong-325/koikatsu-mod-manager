@@ -32,7 +32,7 @@
   <span id="pageBottom"></span>
   <button id="nextBottom" title="下一页" aria-label="下一页">&#8594;</button>
 </div>
-<footer>预览为包内原图；一个条目可能是模型、贴图或其他资源。点击卡片或按住左键拖框选择，可批量停用（原目录改名，随时撤销）。</footer>
+<footer>预览为包内原图；一个条目可能是模型、贴图或其他资源。点击卡片或按住左键拖框选择，可批量停用（原目录改名，随时撤销）或归档（移到 Mod 目录之外的备份文件夹）。</footer>
 <script src="data.js"></script>
 <script src="deps.js"></script>
 <script src="mod-search.js"></script>
@@ -40,6 +40,7 @@
 <script src="media-thumbs.js"></script>
 <script src="view-mods.js"></script>
 <script src="view-trash.js"></script>
+<script src="view-archive.js"></script>
 <script src="plugin-deps.js"></script>
 <script src="preview-ui.js"></script>
 <script>
@@ -49,7 +50,7 @@
   // never keep the page closed: the snapshot is already loaded.
   try { await KK.deps.reload(); } catch (error) { console.warn(error); }
   const initial = location.hash.slice(1);
-  KK.openView(['mods', 'deps', 'trash'].includes(initial) ? initial : 'mods');
+  KK.openView(['mods', 'deps', 'trash', 'archive'].includes(initial) ? initial : 'mods');
 })();
 </script>
 <script src="/browser-ui.js"></script>

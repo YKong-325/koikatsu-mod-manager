@@ -20,6 +20,10 @@ def defaults(game=None):
         # Not a recycle bin: deleting a Mod renames it in place. This folder
         # only holds delete-log.jsonl, the list the restore page reads.
         "modtrash": str(game / "modtrash"),
+        # Archiving does move the file, out of the mods tree and into a folder
+        # the game never scans. It keeps the original relative path and its own
+        # archive-log.jsonl, so the folder is self-describing when copied away.
+        "archive": str(game / "mods_archive"),
     }
 
 
@@ -43,9 +47,17 @@ def validate(values, catalog):
     clean = {}
     labels = {"game": "游戏", "mods": "Mod", "userdata": "UserData",
               "chara": "角色卡", "coordinate": "服装卡", "studio": "场景",
-              "modtrash": "删除记录"}
+              "modtrash": "删除记录", "archive": "归档"}
+    requested_game = values.get("game")
+    requested_game = requested_game.strip() if isinstance(requested_game, str) else ""
+    fallback = defaults(requested_game or None)
     for key in defaults():
         value = values.get(key, "")
+        # A page opened before the archive folder existed posts every other
+        # field and no "archive"; that must keep working, and the sane default
+        # is the folder the game never scans anyway.
+        if key == "archive" and not value:
+            value = fallback["archive"]
         if not isinstance(value, str):
             raise ValueError(labels[key] + "目录必须是文本")
         value = value.strip()
@@ -72,6 +84,18 @@ def validate(values, catalog):
         raise ValueError("删除记录目录不能与资源或索引目录重叠")
     if clean["userdata"] and overlaps(trash, Path(clean["userdata"])):
         raise ValueError("删除记录目录不能与 UserData 目录重叠")
+    archive = Path(clean["archive"])
+    # Archiving is the one action that moves a package out of the mods tree, so
+    # the destination has to be somewhere the game never scans: a folder inside
+    # mods would put the file straight back in front of it.
+    if overlaps(archive, Path(clean["mods"])):
+        raise ValueError("归档目录必须在 Mod 目录之外")
+    if overlaps(archive, catalog.resolve()) or any(overlaps(archive, root) for root in roots):
+        raise ValueError("归档目录不能与管理器索引或资源目录重叠")
+    if clean["userdata"] and overlaps(archive, Path(clean["userdata"])):
+        raise ValueError("归档目录不能与 UserData 目录重叠")
+    if overlaps(archive, trash):
+        raise ValueError("归档目录不能与删除记录目录重叠")
     return clean
 
 

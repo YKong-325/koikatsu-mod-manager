@@ -1,11 +1,15 @@
 """Local manager for the generated Koikatsu mod catalog.
 
-The delete endpoint renames an archive in place to
+Two ways to get a package out of the way, because they answer two different
+intents. The delete endpoint renames an archive in place to
 "<name>.modmanager-<stamp>.disabled", which keeps the game from loading it
 without moving the file anywhere, and appends one line to delete-log.jsonl.
-The restore endpoint renames it back. The purge endpoint is the only one that
-erases an archive for good, and only ever a ".disabled" file. None of them
-accepts an absolute path or a path outside the configured mods directory.
+The archive endpoint actually moves the file, keeping its path relative to the
+mods folder, into the archive directory the settings name - somewhere the game
+never scans - and logs it to archive-log.jsonl inside that folder. Restore and
+unarchive undo either one. The purge endpoint is the only one that erases a
+disabled archive for good, and it only ever touches a ".disabled" file. None of
+them accepts an absolute path or a path outside the configured directories.
 """
 
 import argparse
@@ -173,8 +177,13 @@ class CatalogHandler(SimpleHTTPRequestHandler):
         elif endpoint == "/api/deletions":
             with self.server.mutation_lock:
                 self._deletions()
+        elif endpoint == "/api/archives":
+            with self.server.mutation_lock:
+                self._archives()
         elif endpoint == "/api/deletion-thumb":
             self._deletion_thumb()
+        elif endpoint == "/api/archive-thumb":
+            self._archive_thumb()
         elif endpoint == "/api/render-previews":
             self._json(200, render_snapshot(self.server, self._cursor()))
         elif endpoint == "/api/missing-mods":
@@ -226,7 +235,8 @@ class CatalogHandler(SimpleHTTPRequestHandler):
             self._json(403, {"error": "request not authorized"})
             return
         endpoint = urlparse(self.path).path
-        if endpoint not in {"/api/delete", "/api/restore", "/api/purge",
+        if endpoint not in {"/api/delete", "/api/archive", "/api/restore",
+                            "/api/unarchive", "/api/purge",
                             "/api/mod-classification",
                             "/api/render-previews", "/api/render-previews/cancel",
                             "/api/missing-mods/job", "/api/missing-mods/job/cancel",
@@ -255,6 +265,8 @@ class CatalogHandler(SimpleHTTPRequestHandler):
                     raise ValueError("请先完成目录配置")
                 elif endpoint == "/api/restore":
                     self._restore(data)
+                elif endpoint == "/api/unarchive":
+                    self._unarchive(data)
                 elif endpoint == "/api/purge":
                     self._purge(data)
                 elif endpoint == "/api/mod-classification":
@@ -267,6 +279,8 @@ class CatalogHandler(SimpleHTTPRequestHandler):
                     self._start_fetch(data)
                 elif endpoint == "/api/missing-mods/job/cancel":
                     self._cancel_fetch()
+                elif endpoint == "/api/archive":
+                    self._archive(data)
                 else:
                     self._delete(data)
         except Exception as exc:
@@ -400,6 +414,341 @@ class CatalogHandler(SimpleHTTPRequestHandler):
             "disabled": events[0][2].relative_to(mods_root).as_posix(),
             "disabledFiles": [event["disabled"] for event, _, _ in events],
             "count": len(events),
+            "failures": failures,
+            "warning": warning,
+        })
+
+    def _archive(self, data):
+        """Move one archive, or a whole selection, out of the mods tree.
+
+        Disabling keeps the file where it is and only changes its name, which
+        leaves it inside a folder people still back up as "my mods". Archiving
+        is for the other intent: keep the package, but take it out of the way.
+        The relative path is preserved under the archive root so a restore can
+        put it back exactly where it came from, and so a folder copied to
+        another drive still says what it holds.
+        """
+        requested = data["paths"] if "paths" in data else data.get("path")
+        if isinstance(requested, str):
+            requested = [requested]
+        if not isinstance(requested, list) or not requested:
+            raise ValueError("没有指定要归档的 Mod")
+        if len(requested) > 500:
+            raise ValueError("一次最多归档 500 个 Mod")
+        mods_root = self.server.mods.resolve()
+        archive_root = self.server.archive.resolve()
+        if archive_root == mods_root or mods_root in archive_root.parents:
+            raise ValueError("归档目录在 Mod 目录里，请先到目录设置换一个位置")
+        records = self.server.read_records()
+        by_path = {record["path"]: record for record in records}
+        prepared, failures, seen = [], [], set()
+        for raw in requested:
+            relative = str(raw).replace("\\", "/")
+            if relative in seen:
+                continue
+            seen.add(relative)
+            try:
+                if not relative or Path(relative).is_absolute() or relative.startswith("../"):
+                    raise ValueError("invalid relative path")
+                source = (self.server.mods / Path(relative)).resolve()
+                if source == mods_root or mods_root not in source.parents:
+                    raise ValueError("path outside mods directory")
+                if source.suffix.lower() not in {".zip", ".zipmod"}:
+                    raise ValueError("only zip and zipmod files can be archived")
+                if not source.is_file():
+                    raise FileNotFoundError(relative)
+                if relative not in by_path:
+                    raise ValueError("archive is not in current catalog")
+                destination = (archive_root / Path(relative)).resolve()
+                if archive_root != destination and archive_root not in destination.parents:
+                    raise ValueError("path outside archive directory")
+                if destination.exists():
+                    raise ValueError("归档目录里已有同名文件")
+                prepared.append((relative, source, destination))
+            except Exception as exc:
+                failures.append({"path": relative, "error": str(exc)})
+        if not prepared:
+            raise ValueError(failures[0]["error"] if failures else "没有可归档的文件")
+
+        # Moving across drives is a copy; create the tree first so a missing
+        # parent cannot half-move a batch.
+        moved = []
+        try:
+            for relative, source, destination in prepared:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(destination))
+                moved.append((source, destination))
+        except Exception:
+            for source, destination in reversed(moved):
+                if destination.exists() and not source.exists():
+                    try:
+                        source.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.move(str(destination), str(source))
+                    except OSError:
+                        pass
+            raise
+
+        events = []
+        for relative, _, _ in prepared:
+            events.append({
+                "time": dt.datetime.now().isoformat(timespec="seconds"),
+                "action": "archive",
+                "id": secrets.token_hex(16),
+                "source": relative,
+                # Same relative path under the archive root: a restore only has
+                # to prepend the other root, and the folder explains itself.
+                "archived": Path(relative).as_posix(),
+                "record": by_path[relative],
+                "modsRoot": str(mods_root),
+                "archiveRoot": str(archive_root),
+            })
+        log_size = (self.server.archive_log.stat().st_size
+                    if self.server.archive_log.exists() else 0)
+        try:
+            self.server.archive.mkdir(parents=True, exist_ok=True)
+            with self.server.archive_log.open("a", encoding="utf-8") as log:
+                for event in events:
+                    log.write(json.dumps(event, ensure_ascii=False) + "\n")
+                log.flush()
+                os.fsync(log.fileno())
+        except Exception:
+            for source, destination in reversed(moved):
+                if destination.exists() and not source.exists():
+                    try:
+                        shutil.move(str(destination), str(source))
+                    except OSError:
+                        pass
+            try:
+                with self.server.archive_log.open("r+", encoding="utf-8") as log:
+                    log.truncate(log_size)
+            except OSError:
+                pass
+            raise
+        removed = {relative for relative, _, _ in prepared}
+        warning = None
+        try:
+            self.server.save_records([r for r in records if r["path"] not in removed])
+        except Exception as exc:
+            warning = "Mod 已归档，索引更新失败：" + str(exc)
+        self._json(200, {
+            "ok": True,
+            "id": events[0]["id"],
+            "ids": [event["id"] for event in events],
+            "archived": [event["archived"] for event in events],
+            "archiveRoot": str(self.server.archive),
+            "count": len(events),
+            "failures": failures,
+            "warning": warning,
+        })
+
+    def _archive_entries(self):
+        """The archive log, or nothing when archiving has never been used."""
+        path = self.server.archive_log
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            return []
+        entries = []
+        for line in raw.splitlines():
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+            except ValueError:
+                continue
+        return entries
+
+    def _archives(self):
+        """Every archived package that can still be brought back."""
+        entries = self._archive_entries()
+        undone = {entry.get("id") for entry in entries
+                  if entry.get("action") == "unarchive"}
+        mods_now = str(self.server.mods)
+        archive_now = str(self.server.archive)
+        root = self.server.mods.resolve()
+        archive_root = self.server.archive.resolve()
+        rows = []
+        for entry in entries:
+            if entry.get("action") != "archive" or not entry.get("id"):
+                continue
+            record = entry.get("record") or {}
+            row = {
+                "id": entry["id"],
+                "time": entry.get("time", ""),
+                "source": entry.get("source", ""),
+                "archived": entry.get("archived", ""),
+                "file": record.get("file") or Path(entry.get("source", "")).name,
+                "bytes": record.get("bytes") or 0,
+                "name": record.get("name", ""),
+                "author": record.get("author", ""),
+                "guid": record.get("guid", ""),
+                "restored": entry["id"] in undone,
+                "otherRoot": (entry.get("modsRoot", mods_now) != mods_now or
+                              entry.get("archiveRoot", archive_now) != archive_now),
+                "conflict": False,
+                "available": False,
+            }
+            try:
+                source = confined(archive_root, entry["archived"])
+                row["available"] = source.is_file()
+                row["conflict"] = (root / entry["source"]).exists()
+            except (ValueError, OSError, KeyError):
+                pass
+            rows.append(row)
+        rows.sort(key=lambda item: item["time"], reverse=True)
+        self._json(200, {
+            "items": rows,
+            "pending": sum(1 for row in rows
+                           if row["available"] and not row["restored"]
+                           and not row["otherRoot"] and not row["conflict"]),
+            "modsRoot": mods_now,
+            "archiveRoot": archive_now,
+        })
+
+    def _archive_thumb(self):
+        """The cover of one archived package, drawn the same way as a deletion's."""
+        event_id = self._query("id")
+        entry = next((item for item in self._archive_entries()
+                      if item.get("id") == event_id
+                      and item.get("action") == "archive"), None)
+        if entry is None:
+            self.send_error(404)
+            return
+        cache = getattr(self.server, "archive_thumbs", None)
+        if cache is None:
+            cache = self.server.archive_thumbs = {}
+        if event_id not in cache:
+            cache[event_id] = self._archived_preview(entry)
+        relative = cache[event_id]
+        if not relative:
+            self.send_error(404)
+            return
+        try:
+            raw = (self.server.catalog / relative).read_bytes()
+        except OSError:
+            cache[event_id] = None
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", mimetypes.guess_type(relative)[0] or
+                         "application/octet-stream")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def _archived_preview(self, entry):
+        found = self._first_image(entry.get("record") or {})
+        if found:
+            return found
+        try:
+            archive_root = self.server.archive.resolve()
+            source = confined(archive_root, entry["archived"])
+            if not source.is_file():
+                return None
+            lock = getattr(self.server, "thumb_lock", None)
+            if lock is None:
+                lock = self.server.thumb_lock = threading.Lock()
+            with lock:
+                record = self.server.builder.scan_one(
+                    source, self.server.mods.resolve(), self.server.catalog,
+                    relative=entry["source"])
+        except Exception:
+            return None
+        return self._first_image(record)
+
+    def _unarchive(self, data):
+        """Move archived packages back to the path they came from."""
+        requested = data["ids"] if "ids" in data else data.get("id")
+        if isinstance(requested, str):
+            requested = [requested]
+        if not isinstance(requested, list) or not requested:
+            raise ValueError("没有指定要取回的归档")
+        if len(requested) > 500:
+            raise ValueError("一次最多取回 500 个 Mod")
+        entries = self._archive_entries()
+        archives = {entry["id"]: entry for entry in entries
+                    if entry.get("action") == "archive" and "id" in entry}
+        undone = {entry.get("id") for entry in entries
+                  if entry.get("action") == "unarchive"}
+        archive_root = self.server.archive.resolve()
+        mods_root = self.server.mods.resolve()
+        mods_now = str(self.server.mods)
+        archive_now = str(self.server.archive)
+        prepared, failures, taken = [], [], set()
+        for event_id in requested:
+            try:
+                event = archives.get(event_id)
+                if event is None:
+                    raise ValueError("没有找到这条归档记录")
+                if event_id in undone or event_id in taken:
+                    raise ValueError("这条归档记录已经取回过")
+                if (event.get("modsRoot", mods_now) != mods_now or
+                        event.get("archiveRoot", archive_now) != archive_now):
+                    raise ValueError("请切回归档该 Mod 时使用的目录后再取回")
+                source = confined(archive_root, event["archived"])
+                target = confined(mods_root, event["source"])
+                if not source.is_file():
+                    raise FileNotFoundError("归档文件已不在")
+                if target.exists():
+                    raise ValueError("原位置已有同名文件")
+                taken.add(event_id)
+                prepared.append((event, source, target))
+            except Exception as exc:
+                failures.append({"id": event_id, "error": str(exc)})
+        if not prepared:
+            raise ValueError(failures[0]["error"] if failures else "没有可取回的记录")
+
+        moved = []
+        try:
+            for event, source, target in prepared:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(target))
+                moved.append((source, target))
+        except Exception:
+            for source, target in reversed(moved):
+                if target.exists() and not source.exists():
+                    try:
+                        shutil.move(str(target), str(source))
+                    except OSError:
+                        pass
+            raise
+
+        log_size = self.server.archive_log.stat().st_size
+        try:
+            with self.server.archive_log.open("a", encoding="utf-8") as log:
+                for event, _, _ in prepared:
+                    log.write(json.dumps({"action": "unarchive", "id": event["id"],
+                                          "time": dt.datetime.now().isoformat()}) + "\n")
+                log.flush()
+                os.fsync(log.fileno())
+        except Exception:
+            for source, target in reversed(moved):
+                if target.exists() and not source.exists():
+                    try:
+                        shutil.move(str(target), str(source))
+                    except OSError:
+                        pass
+            try:
+                with self.server.archive_log.open("r+", encoding="utf-8") as log:
+                    log.truncate(log_size)
+            except OSError:
+                pass
+            raise
+
+        back = {event["source"]: event["record"] for event, _, _ in prepared}
+        records = [r for r in self.server.read_records() if r["path"] not in back]
+        records.extend(back.values())
+        warning = None
+        try:
+            self.server.save_records(records)
+        except Exception as exc:
+            warning = "文件已取回，索引更新失败：" + str(exc)
+        self._json(200, {
+            "ok": True,
+            "id": prepared[0][0]["id"],
+            "records": [event["record"] for event, _, _ in prepared],
+            "restored": [event["source"] for event, _, _ in prepared],
+            "count": len(prepared),
             "failures": failures,
             "warning": warning,
         })
@@ -1126,6 +1475,11 @@ def apply_settings(server, values):
     server.records = Path(values["modtrash"])
     server.records.mkdir(parents=True, exist_ok=True)
     server.log = server.records / "delete-log.jsonl"
+    # Archiving moves the package here, keeping its path relative to mods. The
+    # folder is created on the first archive instead of at startup: most people
+    # never use it, and an empty folder next to the game is just clutter.
+    server.archive = Path(values["archive"])
+    server.archive_log = server.archive / "archive-log.jsonl"
 
 
 def attach_indexes(server):

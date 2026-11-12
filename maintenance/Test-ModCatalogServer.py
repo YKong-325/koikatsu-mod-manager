@@ -90,6 +90,9 @@ def main():
             ("127.0.0.1", 0), partial(manager.CatalogHandler, directory=str(catalog)))
         server.mods, server.records = mods, records_dir
         server.log = records_dir / "delete-log.jsonl"
+        # Archiving moves files here; the folder itself is created on first use.
+        server.archive = root / "mods_archive"
+        server.archive_log = server.archive / "archive-log.jsonl"
         server.catalog, server.userdata = catalog, userdata
         server.authority = f"127.0.0.1:{server.server_port}"
         server.token = "test-token"
@@ -304,6 +307,50 @@ def main():
             for item in sorted(batch_dir.iterdir()):
                 item.unlink()
             batch_dir.rmdir()
+            server.save_records(records)
+            # Archiving is the other intent: the package leaves the mods tree
+            # instead of being renamed in place, so the backup folder holds a
+            # copy the game cannot see.
+            status, moved = post("/api/archive", {"path": "example.zipmod"})
+            assert status == 200, moved
+            assert moved["count"] == 1 and moved["archiveRoot"] == str(root / "mods_archive")
+            assert not archive.exists(), "archiving must move the file out of mods"
+            kept = root / "mods_archive" / "example.zipmod"
+            assert kept.read_bytes() == archive_bytes, "moved byte for byte"
+            assert all(r["path"] != "example.zipmod" for r in server.read_records())
+            with urllib.request.urlopen(base + "/api/archives") as response:
+                listed = json.load(response)
+            assert listed["pending"] == 1, listed
+            assert listed["archiveRoot"] == str(root / "mods_archive")
+            row = [r for r in listed["items"] if r["id"] == moved["id"]][0]
+            assert row["available"] and not row["restored"] and not row["conflict"]
+            assert row["file"] == "example.zipmod" and row["bytes"] == len(archive_bytes)
+            # A same-named file already back in mods blocks the return, and the
+            # page has to know before the button is pressed.
+            archive.write_bytes(b"conflict")
+            with urllib.request.urlopen(base + "/api/archives") as response:
+                blocked = [r for r in json.load(response)["items"]
+                           if r["id"] == moved["id"]][0]
+            assert blocked["conflict"] and blocked["available"]
+            assert post("/api/unarchive", {"id": moved["id"]})[0] == 400
+            archive.unlink()
+            status, back = post("/api/unarchive", {"id": moved["id"]})
+            assert status == 200 and back["count"] == 1, back
+            assert archive.read_bytes() == archive_bytes
+            assert not kept.exists()
+            assert post("/api/unarchive", {"id": moved["id"]})[0] == 400
+            # An archive folder inside mods would hand the package straight back
+            # to the game, so the server refuses the move outright.
+            server.archive = mods / "archived"
+            server.archive_log = server.archive / "archive-log.jsonl"
+            assert post("/api/archive", {"path": "example.zipmod"})[0] == 400
+            assert archive.is_file(), "a refused archive changes nothing"
+            server.archive = root / "mods_archive"
+            server.archive_log = server.archive / "archive-log.jsonl"
+            assert post("/api/archive", {"paths": []})[0] == 400
+            assert post("/api/archive", {"path": "../outside.zipmod"})[0] == 400
+            assert post("/api/archive", {"path": "missing.zipmod"})[0] == 400
+            assert (root / "outside.zipmod").is_file()
             server.save_records(records)
             # A deleted package keeps its cover. The thumbnail endpoint serves the
             # preview the index already wrote, and scans the disabled archive once
@@ -599,6 +646,7 @@ def main():
 
             print("PASS: authentication, traversal rejection, in-place disable, index sync, "
                   "restore conflict, restore, duplicate restore rejection, batch disable, "
+                  "archive out of the mods tree and back, refused archive inside mods, "
                   "full-file hashes, resolver parsing, batch preflight, "
                   "retired card endpoints, deleted covers, permanent purge, "
                   "startup-only dependency status, startup filesystem reconciliation, "
@@ -629,6 +677,10 @@ def check_directory_setup(manager, server, post, root):
     invalid = dict(values, mods=str(root / "nonexistent"))
     assert post("/api/config", invalid)[0] == 400
     invalid = dict(values, modtrash=str(cards / "trash"))
+    assert post("/api/config", invalid)[0] == 400
+    # An archive folder inside the mods tree would hand the archived package
+    # straight back to the game, which is the one thing archiving must not do.
+    invalid = dict(values, archive=str(Path(values["mods"]) / "archived"))
     assert post("/api/config", invalid)[0] == 400
     assert not server.config_file.exists()
     # First-use setup does not allow mutation until a valid selection is saved.

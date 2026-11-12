@@ -7,7 +7,7 @@
 .library-card img{display:block;width:100%}
 .pager{display:flex;align-items:center}
 article{position:relative;min-width:0}
-.actions{position:absolute;top:8px;right:8px}
+.actions{position:absolute;top:8px;right:8px;display:flex;gap:6px}
 /* The selection box sits on the cover itself, where a batch action is
    discoverable; the old ::after tick only appeared once it was too late. */
 .pick{position:absolute;top:8px;left:8px;z-index:4;display:grid;place-items:center;
@@ -162,6 +162,7 @@ button:focus-visible{outline:2px solid #175a89;outline-offset:2px}
    screen rather than a graveyard: every row says whether it can come back and
    why not when it cannot. */
 #trashList{padding:0 28px 24px}
+#archiveList{padding:0 28px 24px}
 .trash-help{max-width:900px;line-height:1.6}
 .trash-rows{display:flex;flex-direction:column;gap:8px;margin-top:12px;max-width:1100px}
 .trash-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto auto;
@@ -169,6 +170,9 @@ button:focus-visible{outline:2px solid #175a89;outline-offset:2px}
   border-radius:var(--radius);background:#fff;
   transition:border-color .16s var(--ease),box-shadow .2s var(--ease),
     background-color .16s var(--ease)}
+/* The archive page offers one action per row and no destructive one, so its
+   grid is a column narrower than the deletion list it borrows from. */
+.archive-row{grid-template-columns:auto auto minmax(0,1fr) auto auto}
 /* A row that answers the pointer: the outline warms and the cover leans in a
    little, so scanning 600 rows does not feel like reading a spreadsheet. */
 .trash-row:hover{border-color:#aecdd6;box-shadow:var(--shadow-hover)}

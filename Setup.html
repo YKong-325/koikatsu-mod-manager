@@ -42,9 +42,10 @@ input[type=checkbox]{width:17px;height:17px;margin:0}
 <div class="row"><label for="coordinate"><input type="checkbox" id="enable-coordinate" checked aria-label="启用服装卡目录">服装卡</label><input id="coordinate" type="text" autocomplete="off"><button type="button" data-browse="coordinate">浏览…</button></div>
 <div class="row"><label for="studio"><input type="checkbox" id="enable-studio" checked aria-label="启用场景目录">场景</label><input id="studio" type="text" autocomplete="off"><button type="button" data-browse="studio">浏览…</button></div>
 </section>
-<section><h2><span class="section-index">03</span>删除记录</h2>
+<section><h2><span class="section-index">03</span>删除与归档</h2>
+<div class="row"><label for="archive">归档</label><input id="archive" type="text" required autocomplete="off"><button type="button" data-browse="archive">浏览…</button></div>
 <div class="row single"><label for="modtrash">记录位置</label><input id="modtrash" type="text" readonly autocomplete="off"></div>
-<p class="note">停用 Mod 不会移动文件，只把名字改成 <code>.disabled</code>。这里的 <code>delete-log.jsonl</code> 是「已删除」页恢复操作的全部依据，请勿删除或改动。</p>
+<p class="note">停用 Mod 不会移动文件，只把名字改成 <code>.disabled</code>，恢复依赖这里的 <code>delete-log.jsonl</code>，请勿删除或改动。归档会把压缩包整个移动到归档目录、保留它原来的相对路径，游戏不再扫描到它；记录写在归档目录里的 <code>archive-log.jsonl</code>，换目录后旧的归档列表不会跟过来。</p>
 </section>
 <div class="actions"><button id="save" class="primary" type="submit" disabled>保存并建立索引</button></div>
 <div id="status" role="status" aria-live="polite">正在读取配置…</div>

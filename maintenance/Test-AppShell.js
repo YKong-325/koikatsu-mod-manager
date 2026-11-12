@@ -10,7 +10,7 @@ const {createApp, descendants} = require('./DomShim');
 const {catalog, library, deps} = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'plugin-deps.js'];
+  'view-trash.js', 'view-archive.js', 'plugin-deps.js'];
 
 const app = createApp({catalog, library, deps});
 const KK = app.load(SCRIPTS);
@@ -20,8 +20,9 @@ assert.ok(KK, 'page kernel must exist');
 assert.equal(KK.data.catalog.length, 41);
 
 const tabs = $('tabs').children.filter(node => node.tagName === 'BUTTON');
-assert.equal(tabs.length, 3, 'one tab per registered view');
-assert.deepEqual(tabs.map(tab => tab.textContent), ['Mod', '已删除', '依赖检查']);
+assert.equal(tabs.length, 4, 'one tab per registered view');
+assert.deepEqual(tabs.map(tab => tab.textContent),
+  ['Mod', '已删除', '归档', '依赖检查']);
 assert.equal(KK.facets.length, 2,
   'the plugin answers two questions on the Mod grid: card references and collisions');
 

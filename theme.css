@@ -177,6 +177,9 @@ article:hover, .library-card:hover {
 summary { font-size: 12px; color: #657c86; padding: 3px 0; }
 summary::marker { color: #49a2b3; }
 .delete { width: 30px; min-height: 30px; height: 30px; padding: 0; color: var(--rose); background: #fff8fa; border-color: #e8c8d3; }
+/* Archive is the quiet sibling: it moves the file somewhere safe instead of
+   hiding it in place, so it must not wear the destructive colour. */
+.archive { width: 30px; min-height: 30px; height: 30px; padding: 0; font-size: 15px; line-height: 1; color: var(--cyan); background: #f4fbfc; border-color: #c8e2e8; }
 .actions { right: 8px; top: 8px; }
 .relation-action { color: var(--cyan); border-color: #c0dce3; background: #f3fbfc; font-size: 12px; }
 .detection-summary { border-color: var(--line); border-left: 3px solid #eca1b8; padding: 10px 12px; background: #fdf7fa; font-size: 13px; }
@@ -202,6 +205,7 @@ button:not(:disabled)[aria-pressed="true"] {
 }
 /* The small destructive affordances keep their tint while they lift. */
 .delete:not(:disabled):hover { background: #fff0f4; border-color: #dc9fb1; color: #a83a5c; }
+.archive:not(:disabled):hover { background: #eaf8fa; border-color: #9ed3dc; color: #06687a; }
 .relation-action:not(:disabled):hover { background: #eaf8fa; border-color: #9ed3dc; color: #06687a; }
 .settings-page .primary:not(:disabled):hover {
   background: #0f7b8c; border-color: #0f7b8c; color: #fff;

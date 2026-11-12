@@ -150,6 +150,14 @@
   deleteButton.id = 'deleteSelected';
   deleteButton.type = 'button';
   deleteButton.onclick = () => deleteSelected();
+  /* Two different intents, two different buttons. Deleting leaves the file in
+   * place under a .disabled name - fine for "the game must not load this" but
+   * useless to anyone whose backup is "whatever is in mods". Archiving is the
+   * one action here that moves the package out of the mods tree. */
+  const archiveButton = el('button', '归档选中', 'bulk-action');
+  archiveButton.id = 'archiveSelected';
+  archiveButton.type = 'button';
+  archiveButton.onclick = () => archiveSelected();
   /* Packages without a preview have nothing to recognise them by, and the only
    * thing left inside them is the mesh. Rendering happens on the server as one
    * background job; the page polls it, then repaints once. */
@@ -157,8 +165,8 @@
   renderButton.id = 'renderPreviews';
   renderButton.type = 'button';
   renderButton.onclick = () => renderPreviews();
-  bulkBar.append(bulkCount, pageButton, clearButton, renderButton, deleteButton,
-    exportButton, undoButton);
+  bulkBar.append(bulkCount, pageButton, clearButton, renderButton, archiveButton,
+    deleteButton, exportButton, undoButton);
 
   controls.append(modName, query, facets, slot, image, sort, pluginFacets);
 
@@ -210,6 +218,9 @@
       : '未选择 · 勾选缩略图左上角的方框，或点卡片、按住左键拖框';
     deleteButton.textContent = count ? `删除选中（${count.toLocaleString()}）` : '删除选中';
     deleteButton.disabled = !count || location.protocol !== 'http:' || pending || rendering;
+    archiveButton.textContent = count ? `归档选中（${count.toLocaleString()}）` : '归档选中';
+    archiveButton.title = '把选中的 Mod 移动到 Mod 目录之外的备份文件夹';
+    archiveButton.disabled = !count || location.protocol !== 'http:' || pending || rendering;
     renderButton.textContent = rendering ? '取消渲染'
       : (count ? `渲染缩略图（${count.toLocaleString()}）` : '渲染缩略图');
     renderButton.title = count
@@ -368,6 +379,18 @@
     return button;
   }
 
+  /* Archive, not disable: the file leaves the mods folder entirely and lands in
+   * the backup directory as the same relative path, which is what makes it safe
+   * to hand that folder to anyone or copy it to another drive. */
+  function archiveButtonFor(record) {
+    const button = el('button', '\u2193', 'archive');
+    button.title = '归档此 Mod（移动到 Mod 目录之外的备份文件夹）';
+    button.setAttribute('aria-label', '归档此 Mod：' + record.file);
+    button.disabled = location.protocol !== 'http:';
+    button.onclick = () => archiveMods([record], button);
+    return button;
+  }
+
   /* Why a package has no cover is worth saying: "author never packed a
    * thumbnail" and "we could not decode it" look identical on screen. */
   function emptyLabel(record) {
@@ -410,7 +433,7 @@
     meta.append(itemDetails(record));
     if (record.errors.length) meta.append(el('div', record.errors.join(' | '), 'error'));
     const actions = el('div', undefined, 'actions');
-    actions.append(disableButton(record));
+    actions.append(archiveButtonFor(record), disableButton(record));
     meta.append(actions);
     KK.applyModHooks(record, card, meta);
     return card;
@@ -714,6 +737,74 @@
       return;
     }
     await disableMods(targets);
+  }
+
+  /* Archiving is the "keep it, just not installed" action. Nothing is deleted,
+   * so the confirmation only has to say where the files are going - and the
+   * server answers with the real folder, which the batch bar cannot know. */
+  async function archiveMods(targets, button) {
+    if (pending || !targets.length) return;
+    pending = true;
+    updateBulk();
+    if (button) { button.disabled = true; button.textContent = '\u2026'; }
+    setStatus(targets.length === 1
+      ? '正在归档 ' + targets[0].file + ' · 移动文件…'
+      : `正在归档 ${targets.length} 个 Mod · 移动文件…`);
+    try {
+      const result = await api.mutate('/api/archive',
+        {paths: targets.map(record => record.path)});
+      const removed = new Set(targets.map(record => record.path));
+      for (let index = records.length - 1; index >= 0; index--) {
+        if (removed.has(records[index].path)) records.splice(index, 1);
+      }
+      removed.forEach(path => selected.delete(path));
+      persist();
+      const failures = result.failures || [];
+      await KK.deps.reload();
+      preserveViewport(() => {
+        apply({keepPage: true});
+        statusLine(`已归档 ${result.count || removed.size} 个 Mod 到 ${result.archiveRoot || '归档文件夹'}` +
+          (failures.length ? ` · ${failures.length} 个未能归档` : '') +
+          (result.warning ? ' · ' + result.warning : ''));
+      });
+    } catch (error) {
+      setStatus('归档失败：' + error.message);
+      if (button) { button.disabled = false; button.textContent = '\u2193'; }
+    } finally {
+      pending = false;
+      updateBulk();
+    }
+  }
+
+  /* Where archives go is a setting, so the confirmation quotes the real folder
+   * instead of saying "some backup folder". One request at boot; the server
+   * answers long before anyone presses the button. */
+  let archiveRoot = '';
+  if (location.protocol === 'http:') {
+    KK.sessionReady
+      .then(() => fetch('/api/config'))
+      .then(response => (response.ok ? response.json() : null))
+      .then(payload => { archiveRoot = (payload && payload.values && payload.values.archive) || ''; })
+      .catch(() => {});
+  }
+
+  async function archiveSelected() {
+    if (pending) return;
+    const targets = records.filter(record => selected.has(record.path));
+    if (!targets.length) {
+      setStatus('没有选中任何 Mod');
+      return;
+    }
+    const megabytes = targets.reduce((sum, record) => sum + record.bytes, 0) / 1048576;
+    const where = archiveRoot ? `「${archiveRoot}」` : 'Mod 目录之外的备份文件夹';
+    const question = `归档 ${targets.length} 个 Mod（共 ${megabytes.toFixed(1)} MB）？\n\n`
+      + `文件会被移动到${where}，游戏不再加载，内容不会被修改，`
+      + '之后可在「归档」页取回。';
+    if (!window.confirm(question)) {
+      statusLine('已取消');
+      return;
+    }
+    await archiveMods(targets);
   }
 
   /* Rendering reads the package's meshes and textures and paints a product-style
