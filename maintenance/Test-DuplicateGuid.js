@@ -11,7 +11,7 @@ const {createApp} = require('./DomShim');
 const Fixture = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'plugin-deps.js', 'plugin-conflicts.js'];
+  'view-trash.js', 'card-refs.js', 'plugin-deps.js', 'plugin-conflicts.js'];
 
 const catalog = Fixture.catalog.map(record => ({...record}));
 const mine = catalog[0];
@@ -85,12 +85,34 @@ assert.ok(packs[0].children.length > 1, 'each package is shown with its preview,
    carry the same number, because cards name the GUID rather than the file. */
 const packFor = path => Array.from(packs)
   .find(node => node.querySelector('.path').textContent === path);
-assert.equal(packFor(mine.path).querySelector('.guid-usage').textContent,
-  '被 1 张角色卡引用', 'a colliding package says how many cards wear it');
-assert.equal(packFor(twin.path).querySelector('.guid-usage').textContent,
-  '未被任何卡片引用', 'the unused copy says so, which is what makes it droppable');
-assert.ok(packFor(twin.path).querySelector('.guid-usage').classList.contains('unused'),
+const usageFor = path => packFor(path).querySelector('.guid-usage');
+const countLink = usageFor(mine.path).querySelector('.ref-count');
+assert.equal(countLink.textContent, '被 1 张角色卡引用',
+  'a colliding package says how many cards wear it');
+assert.equal(countLink.title, '查看这 1 张角色卡',
+  'and the count is a door to those cards, as it is on the Mod grid');
+assert.equal(usageFor(twin.path).textContent, '未被任何卡片引用',
+  'the unused copy says so, which is what makes it droppable');
+assert.ok(usageFor(twin.path).classList.contains('unused'),
   'the unused copy is not dressed up in the colour of a reason to keep it');
+
+/* Pressing the count has to reach the same list the grid opens, from inside a
+   dialog that is already modal. */
+let asked = '';
+KK.api.read = async endpoint => {
+  asked = endpoint;
+  return {total: 1, cards: [{path: 'chara/a.png', file: 'a.png', kind: '角色卡',
+    thumb: 'library_thumbs/a.jpg'}]};
+};
+countLink.onclick();
+assert.equal(asked, '/api/library/cards?mod=pack000.zipmod&kind=cards',
+  'the count asks for this package and this kind of card');
+const refs = app.byId.get('cardRefsDialog');
+assert.equal(refs.open, true, 'the cards open over the collision list');
+assert.match(refs.querySelector('h2').textContent, /被 1 张角色卡引用/,
+  'the list is titled the same way as when it is opened from the grid');
+refs.children[0].children[1].onclick();
+assert.equal(refs.open, false, 'closing it leaves the collision list in place');
 
 /* The banner is the door on the card itself: clicking the one on a colliding
    card opens that GUID's group instead of the whole list. */
@@ -108,5 +130,5 @@ assert.equal(summary.querySelector('.conflict-open'), null,
 
 console.log('PASS: duplicate GUIDs are marked on the Mod grid, the card banner and '
   + 'the toolbar door both open the colliding packages as cards carrying the '
-  + 'same reference counts the grid shows, and the dependency view no longer '
-  + 'reports on collisions');
+  + 'same reference counts the grid shows -- each of them opening the cards '
+  + 'behind it -- and the dependency view no longer reports on collisions');

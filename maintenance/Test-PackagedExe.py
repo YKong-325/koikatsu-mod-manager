@@ -337,8 +337,12 @@ def main():
             # Mod grid: a cover is what tells two similar names apart.
             assert "KK.media.thumb(thumb.src" in conflicts
             # ...and each of them repeats the reference count the grid shows,
-            # so a collision can be judged from the dialog alone.
-            assert "guid-usage" in conflicts
+            # opening the same list the grid opens. Two screens print that
+            # count now, so the list lives in a module of its own.
+            assert "guid-usage" in conflicts and "KK.refs.show" in conflicts
+            assert b"card-refs.js" in page, "the shell must load the shared list"
+            shared = get("/card-refs.js").decode("utf-8")
+            assert "KK.refs" in shared and "api/library/cards" in shared
             assert b".guid-usage" in get("/manager.css")
             assert b"triangle-alert.svg" in get("/manager.css")
             assert get("/assets/icons/triangle-alert.svg"), \
@@ -355,9 +359,10 @@ def main():
             # Each card states it per kind -- character cards, outfit cards and
             # scenes are counted apart, on the default view.
             assert "张${kind}引用" in report and "reference-counts" in report
-            # Each of those lines opens the cards behind it, so both the dialog
-            # and the one query that fills it have to be in the shipped script.
-            assert "card-refs" in report and "/api/library/cards" in report
+            # Each of those lines opens the cards behind it. The list is shared
+            # with the collision view, so this script only has to hand over the
+            # package; the dialog and its query live in card-refs.js.
+            assert "KK.refs.show" in report
             # The collision door is not a facet any more: it opens a list in
             # place instead of narrowing the grid, so the grid keeps a single
             # dropdown (card references) and view-mods ships the tool slot that

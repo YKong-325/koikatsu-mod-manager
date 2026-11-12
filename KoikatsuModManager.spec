@@ -9,7 +9,7 @@ resources = [
     "PreviewRenderer.py", "ModRecovery.py",
     "ModManager.html", "BrowserLoading.html", "Setup.html", "settings-ui.js",
     "browser-ui.js", "app-core.js", "media-thumbs.js", "view-mods.js",
-    "view-trash.js", "view-archive.js",
+    "view-trash.js", "view-archive.js", "card-refs.js",
     "plugin-deps.js", "plugin-conflicts.js", "preview-ui.js", "mod-search.js",
     "manager.css", "theme.css", "THIRD_PARTY_NOTICES.md",
 ]

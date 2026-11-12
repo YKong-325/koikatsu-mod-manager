@@ -459,7 +459,7 @@ def save(records, out, old, elapsed):
     # Front-end modules are copied as-is; keep this list in sync with the
     # <script> tags in ModManager.html.
     for name in ("app-core.js", "media-thumbs.js", "view-mods.js",
-                 "view-trash.js", "view-archive.js",
+                 "view-trash.js", "view-archive.js", "card-refs.js",
                  "plugin-deps.js", "plugin-conflicts.js", "preview-ui.js",
                  "mod-search.js", "manager.css", "theme.css"):
         asset = Path(__file__).with_name(name)

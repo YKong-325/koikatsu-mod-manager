@@ -10,7 +10,8 @@ const {createApp, descendants} = require('./DomShim');
 const {catalog, library, deps} = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'view-archive.js', 'plugin-deps.js', 'plugin-conflicts.js'];
+  'view-trash.js', 'view-archive.js', 'card-refs.js', 'plugin-deps.js',
+  'plugin-conflicts.js'];
 
 const app = createApp({catalog, library, deps});
 const KK = app.load(SCRIPTS);

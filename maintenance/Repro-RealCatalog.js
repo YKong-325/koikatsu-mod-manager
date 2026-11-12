@@ -21,7 +21,7 @@ console.log('catalog:', (app.window.MOD_CATALOG || []).length,
   '| deps.cards:', Object.keys((app.window.KK_DEPS || {}).cards || {}).length);
 
 const KK = app.load(['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'plugin-deps.js', 'preview-ui.js']);
+  'view-trash.js', 'card-refs.js', 'plugin-deps.js', 'preview-ui.js']);
 
 console.log('views:', KK ? KK.facets.length + ' facets' : 'NO KK');
 const tabs = app.document.getElementById('tabs');

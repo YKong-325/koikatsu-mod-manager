@@ -48,7 +48,7 @@ const routes = {
 
 const app = createApp({protocol: 'http:', catalog: [...catalog], deps, routes});
 const KK = app.load(['mod-search.js', 'app-core.js', 'media-thumbs.js',
-  'view-mods.js', 'view-trash.js', 'plugin-deps.js']);
+  'view-mods.js', 'view-trash.js', 'card-refs.js', 'plugin-deps.js']);
 const $ = id => app.byId.get(id);
 const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 

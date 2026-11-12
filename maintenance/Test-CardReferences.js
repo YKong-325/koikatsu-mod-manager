@@ -12,7 +12,7 @@ const {createApp, descendants} = require('./DomShim');
 const {catalog, library, deps} = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'plugin-deps.js'];
+  'view-trash.js', 'card-refs.js', 'plugin-deps.js'];
 
 async function main() {
   const app = createApp({catalog, library, deps});
@@ -21,7 +21,7 @@ async function main() {
 
   KK.openView('mods');
 
-  const dialog = app.document.body.querySelector('.card-refs');
+  const dialog = app.byId.get('cardRefsDialog');
   assert.ok(dialog, 'the reference list is one dialog, not one per card');
   const title = dialog.children[0].children[0];
   const body = dialog.querySelector('.card-refs-body');

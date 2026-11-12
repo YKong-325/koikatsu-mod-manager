@@ -11,7 +11,7 @@ const {createApp} = require('./DomShim');
 const {catalog, library, deps} = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'view-trash.js', 'plugin-deps.js'];
+  'view-trash.js', 'card-refs.js', 'plugin-deps.js'];
 
 async function main() {
   const app = createApp({catalog, library, deps, confirmAnswer: () => true});

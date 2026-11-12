@@ -10,7 +10,7 @@ const {createApp} = require('./DomShim');
 const fixture = require('./Fixture');
 
 const SCRIPTS = ['mod-search.js', 'app-core.js', 'media-thumbs.js', 'view-mods.js',
-  'plugin-deps.js'];
+  'card-refs.js', 'plugin-deps.js'];
 
 const VIEWPORT = 900;
 const ROW = 200;          // each fake row of cards is 200px tall

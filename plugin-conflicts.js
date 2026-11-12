@@ -95,24 +95,31 @@
         event.clientY < box.top || event.clientY > box.bottom) closeDialog();
   });
 
-  /* "Does anything wear this GUID at all?" is the same question the Mod grid
-   * answers on every card, so the dialog answers it in the same words. Both
-   * copies carry the identical number -- cards name the GUID, not the file --
-   * and that is the useful reading: zero means either copy can go, a number
-   * means one of them has to stay. */
+  /* "Does anything wear this GUID at all?" is the question the Mod grid answers
+   * on every card, so the dialog answers it the same way: each kind is a button
+   * that opens the cards behind it. Both copies carry the identical number --
+   * cards name the GUID, not the file -- and that is the useful reading: zero
+   * means either copy can go, a number means one of them has to stay. */
   const REF_KINDS = [['角色卡', 'cards'], ['服装卡', 'outfits'], ['场景卡', 'scenes']];
 
   function usageOf(record) {
     const verdict = KK.deps.mod(record.path);
     if (!verdict) return null;
-    const parts = [];
+    const box = el('div', undefined, 'guid-usage');
     for (const [kind, key] of REF_KINDS) {
       const count = (verdict[key] || []).length;
-      if (count) parts.push(`${count} 张${kind}`);
+      if (!count) continue;
+      const link = el('button', `被 ${count} 张${kind}引用`, 'ref-count');
+      link.type = 'button';
+      link.title = `查看这 ${count} 张${kind}`;
+      link.onclick = () => KK.refs.show(record, kind, count);
+      box.append(link);
     }
-    return parts.length
-      ? {text: `被 ${parts.join('、')}引用`, used: true}
-      : {text: '未被任何卡片引用', used: false};
+    if (!box.children.length) {
+      box.className = 'guid-usage unused';
+      box.append(el('span', '未被任何卡片引用'));
+    }
+    return box;
   }
 
   /* Same card shape as the Mod grid, scaled down: a cover is what tells two
@@ -128,7 +135,7 @@
       el('div', record.path, 'path'),
       el('div', `${(record.bytes / 1048576).toFixed(1)} MB`, 'count'));
     const usage = usageOf(record);
-    if (usage) meta.append(el('div', usage.text, usage.used ? 'guid-usage' : 'guid-usage unused'));
+    if (usage) meta.append(usage);
     card.append(meta);
     return card;
   }
