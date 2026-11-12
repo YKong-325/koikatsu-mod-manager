@@ -113,6 +113,12 @@ body.marquee-active{user-select:none;cursor:crosshair}
   font-family:ui-monospace,Consolas,"Courier New",monospace;overflow-wrap:anywhere}
 .guid-group .library-card{margin-bottom:6px}
 .guid-group .library-card:last-child{margin-bottom:0}
+/* The dialog repeats the reference counts the Mod grid prints, so a collision
+   can be judged without going back to the grid: zero means the GUID is unused,
+   a number means it has to survive in one of the copies. Green when used, grey
+   when not -- the same two states the grid gives the same fact. */
+.guid-usage{margin-top:4px;font-size:12px;line-height:1.45;color:#226c56}
+.guid-usage.unused{color:#74868d}
 /* A GUID collision is decided by the game, not by the manager, but both packs
    stay installed: the card has to say so above the package name, where the
    "why is this mod doing nothing" question starts. The whole line is the way

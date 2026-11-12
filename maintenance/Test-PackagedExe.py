@@ -336,6 +336,10 @@ def main():
             # Colliding packages are drawn as cards with their covers, like the
             # Mod grid: a cover is what tells two similar names apart.
             assert "KK.media.thumb(thumb.src" in conflicts
+            # ...and each of them repeats the reference count the grid shows,
+            # so a collision can be judged from the dialog alone.
+            assert "guid-usage" in conflicts
+            assert b".guid-usage" in get("/manager.css")
             assert b"triangle-alert.svg" in get("/manager.css")
             assert get("/assets/icons/triangle-alert.svg"), \
                 "the collision button needs its icon"

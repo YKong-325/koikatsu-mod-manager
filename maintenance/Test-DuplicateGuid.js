@@ -80,6 +80,18 @@ assert.deepEqual(
 // rows are cards, not lines of text.
 assert.ok(packs[0].children.length > 1, 'each package is shown with its preview, not just text');
 
+/* The dialog repeats the reference counts the Mod grid prints: zero means the
+   GUID is unused, a number means one copy has to stay. Both copies of a GUID
+   carry the same number, because cards name the GUID rather than the file. */
+const packFor = path => Array.from(packs)
+  .find(node => node.querySelector('.path').textContent === path);
+assert.equal(packFor(mine.path).querySelector('.guid-usage').textContent,
+  '被 1 张角色卡引用', 'a colliding package says how many cards wear it');
+assert.equal(packFor(twin.path).querySelector('.guid-usage').textContent,
+  '未被任何卡片引用', 'the unused copy says so, which is what makes it droppable');
+assert.ok(packFor(twin.path).querySelector('.guid-usage').classList.contains('unused'),
+  'the unused copy is not dressed up in the colour of a reason to keep it');
+
 /* The banner is the door on the card itself: clicking the one on a colliding
    card opens that GUID's group instead of the whole list. */
 cardFor(mine.path).querySelector('.conflict-flag').onclick();
@@ -95,5 +107,6 @@ assert.equal(summary.querySelector('.conflict-open'), null,
   'the collision count is no longer part of the dependency header');
 
 console.log('PASS: duplicate GUIDs are marked on the Mod grid, the card banner and '
-  + 'the toolbar door both open the colliding packages as cards, and the '
-  + 'dependency view no longer reports on collisions');
+  + 'the toolbar door both open the colliding packages as cards carrying the '
+  + 'same reference counts the grid shows, and the dependency view no longer '
+  + 'reports on collisions');

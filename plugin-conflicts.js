@@ -95,6 +95,26 @@
         event.clientY < box.top || event.clientY > box.bottom) closeDialog();
   });
 
+  /* "Does anything wear this GUID at all?" is the same question the Mod grid
+   * answers on every card, so the dialog answers it in the same words. Both
+   * copies carry the identical number -- cards name the GUID, not the file --
+   * and that is the useful reading: zero means either copy can go, a number
+   * means one of them has to stay. */
+  const REF_KINDS = [['角色卡', 'cards'], ['服装卡', 'outfits'], ['场景卡', 'scenes']];
+
+  function usageOf(record) {
+    const verdict = KK.deps.mod(record.path);
+    if (!verdict) return null;
+    const parts = [];
+    for (const [kind, key] of REF_KINDS) {
+      const count = (verdict[key] || []).length;
+      if (count) parts.push(`${count} 张${kind}`);
+    }
+    return parts.length
+      ? {text: `被 ${parts.join('、')}引用`, used: true}
+      : {text: '未被任何卡片引用', used: false};
+  }
+
   /* Same card shape as the Mod grid, scaled down: a cover is what tells two
    * similarly named packs apart, and a collision is exactly the case where the
    * names are similar. */
@@ -107,6 +127,8 @@
     meta.append(el('div', record.name || record.file, 'name'),
       el('div', record.path, 'path'),
       el('div', `${(record.bytes / 1048576).toFixed(1)} MB`, 'count'));
+    const usage = usageOf(record);
+    if (usage) meta.append(el('div', usage.text, usage.used ? 'guid-usage' : 'guid-usage unused'));
     card.append(meta);
     return card;
   }
