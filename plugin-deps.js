@@ -428,11 +428,13 @@
     ];
     if (clash.groups) {
       // A count on its own is not actionable: it opens the groups so the user
-      // can see which packages are fighting over the GUID.
-      const link = el('button', `GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）`,
-        'clash-count');
+      // can see which packages are fighting over the GUID. It reads as a button
+      // rather than a footnote -- an underlined sentence was easy to miss.
+      const link = el('button', undefined, 'clash-count');
       link.type = 'button';
       link.title = '查看哪些包共用一个 GUID';
+      link.append(el('span', `GUID 冲突 ${clash.groups} 组（${clash.packs} 个包）`),
+        el('span', '查看 ›', 'clash-go'));
       link.onclick = showClashes;
       lines.push(link);
     }
@@ -720,13 +722,20 @@
     return groups.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   }
 
+  /* Same card shape as the Mod grid, scaled down: a cover is what tells two
+     similarly named packs apart, and a collision is exactly the case where the
+     names are similar. */
   function guidPack(record) {
-    const line = el('div', undefined, 'guid-pack');
-    const main = el('div', undefined, 'guid-pack-main');
-    main.append(el('div', record.name || record.file, 'name'),
-      el('div', record.path, 'path'));
-    line.append(main, el('div', `${(record.bytes / 1048576).toFixed(1)} MB`, 'size'));
-    return line;
+    const card = el('article', undefined, 'library-card');
+    const thumb = (record.images || [])[0];
+    if (thumb) card.append(KK.media.thumb(thumb.src, record.name || record.file));
+    else card.append(el('div', '暂无预览', 'empty'));
+    const meta = el('div', undefined, 'libmeta');
+    meta.append(el('div', record.name || record.file, 'name'),
+      el('div', record.path, 'path'),
+      el('div', `${(record.bytes / 1048576).toFixed(1)} MB`, 'count'));
+    card.append(meta);
+    return card;
   }
 
   function showClashes() {

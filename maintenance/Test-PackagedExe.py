@@ -325,7 +325,13 @@ def main():
             # A collision count nobody can open is the same as no information:
             # the header line has to be a control that lists the packages.
             assert "clash-count" in report and "function showClashes" in report
-            assert "guid-group" in report and "guid-pack" in report
+            assert "guid-group" in report and "guid-key" in report
+            # Colliding packages are drawn as cards with their covers, like the
+            # Mod grid: a cover is what tells two similar names apart.
+            assert "KK.media.thumb(thumb.src" in report
+            assert b"triangle-alert.svg" in get("/manager.css")
+            assert get("/assets/icons/triangle-alert.svg"), \
+                "the collision button needs its icon"
             # "Which packages no card refers to" belongs to the Mod grid, where a
             # package is actually disabled. The dependency view answers only
             # "which card is missing what", so its second mode is gone while the

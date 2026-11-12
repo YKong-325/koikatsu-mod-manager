@@ -60,12 +60,18 @@ body.marquee-active{user-select:none;cursor:crosshair}
 .detection-summary{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 18px;padding:12px 0;border-top:1px solid #d8dde2;line-height:1.6}
 .detection-summary .notice{flex-basis:100%;margin:0}
 /* The collision count is a door, not a label: a number nobody can open is the
-   same as no information, so it presses like the reference counts do. */
-.clash-count{flex-basis:100%;width:max-content;padding:0;border:0;background:none;
-  font:inherit;font-size:12px;color:#5d717a;text-align:left;cursor:pointer;
-  text-decoration:underline dotted #a9c3cc;text-underline-offset:3px}
-.clash-count:hover{color:#175a89;text-decoration:underline solid #175a89}
+   same as no information. It carries its own tint and a "查看 ›" tail, because
+   the underlined-text version was routinely read as a footnote and skipped. */
+.clash-count{flex-basis:100%;display:inline-flex;align-items:center;gap:8px;
+  max-width:100%;margin:2px 0 0;padding:6px 11px;
+  border:1px solid #e8c8d3;border-radius:4px;background:#fff6f8;
+  font:inherit;font-size:12px;font-weight:600;color:#a83a5c;
+  text-align:left;cursor:pointer}
+.clash-count::before{content:"";width:14px;height:14px;flex:none;background:currentColor;
+  mask:url("assets/icons/triangle-alert.svg") center/contain no-repeat}
+.clash-count:not(:disabled):hover{background:#fdeef1;border-color:#dc9fb1;color:#8d1e32}
 .clash-count:focus-visible{outline:2px solid #58a6c8;outline-offset:2px}
+.clash-go{margin-left:auto;padding-left:10px;font-size:11px;font-weight:400;opacity:.8}
 .detection-label{font-size:13px;font-weight:600;margin-top:10px;overflow-wrap:anywhere}
 /* One line per kind of card that names this package. Kept small and tight, so
  * a well-used package does not grow three headlines taller than its cover. */
@@ -98,19 +104,15 @@ body.marquee-active{user-select:none;cursor:crosshair}
 .card-refs .libmeta{padding:0;min-width:0}
 .card-refs .name{padding-right:0}
 /* The other payload this dialog carries: the groups fighting over one GUID.
-   Each group states the id once, then the packages under it, so "which two
-   packs?" is answered without leaving the dependency view. */
-.guid-groups{display:flex;flex-direction:column;gap:12px}
-.guid-group{padding:8px 10px;border-radius:4px;background:#fff}
-.guid-key{margin:0 0 4px;font-size:12px;font-weight:600;color:#5d717a;
+   Each group states the id once, then the packages under it as the same cards
+   the Mod grid uses -- the cover is what separates two near-identical names. */
+.guid-groups{display:flex;flex-direction:column;gap:16px}
+.guid-group{padding-top:10px;border-top:1px solid #dbe4e8}
+.guid-groups > .guid-group:first-child{padding-top:0;border-top:0}
+.guid-key{margin:0 0 8px;font-size:12px;font-weight:600;color:#5d717a;
   font-family:ui-monospace,Consolas,"Courier New",monospace;overflow-wrap:anywhere}
-.guid-pack{display:flex;align-items:center;gap:14px;padding:5px 0;
-  border-top:1px solid #f0f4f6}
-.guid-group .guid-pack:first-of-type{border-top:0}
-.guid-pack-main{flex:1;min-width:0}
-.guid-pack .name{font-size:13px;font-weight:600;padding:0;overflow-wrap:anywhere}
-.guid-pack .path{font-size:11px;color:#5d717a;overflow-wrap:anywhere}
-.guid-pack .size{flex:none;font-size:12px;color:#5d717a}
+.guid-group .library-card{margin-bottom:6px}
+.guid-group .library-card:last-child{margin-bottom:0}
 /* A GUID collision is decided by the game, not by the manager, but both packs
    stay installed: the card has to say so above the package name, where the
    "why is this mod doing nothing" question starts. The title attribute names

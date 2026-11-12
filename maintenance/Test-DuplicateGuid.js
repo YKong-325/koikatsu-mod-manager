@@ -84,12 +84,15 @@ const groups = clashDialog.querySelectorAll('.guid-group');
 assert.equal(groups.length, 1, 'one block per colliding GUID');
 assert.equal(groups[0].querySelector('.guid-key').textContent, mine.guid.toLowerCase(),
   'the block names the GUID the packages share');
-const packs = groups[0].querySelectorAll('.guid-pack');
+const packs = groups[0].querySelectorAll('.library-card');
 assert.equal(packs.length, 2, 'both sides of the collision are listed, not just one');
 assert.deepEqual(
   Array.from(packs).map(node => node.querySelector('.path').textContent).sort(),
   [mine.path, twin.path].sort(),
   'the two packages listed are the two that collide');
+// The cover is the only thing that separates two near-identical names, so the
+// rows are cards, not lines of text.
+assert.ok(packs[0].children.length > 1, 'each package is shown with its preview, not just text');
 
 console.log('PASS: duplicate GUIDs are marked on the Mod grid without a filter, '
   + 'name the package they collide with, can be filtered to, and are counted '
