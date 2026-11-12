@@ -71,6 +71,12 @@ assert.ok(archive, 'a card offers archiving next to disabling');
 assert.ok(disable, 'and still offers disabling');
 assert.match(archive.title, /归档/);
 assert.match(disable.title, /停用/);
+// Both buttons are icon-only: the glyph is a CSS mask over the button itself,
+// so the text node stays empty and the name lives in aria-label.
+assert.equal(archive.textContent, '', 'archiving shows an icon, not a glyph');
+assert.equal(disable.textContent, '', 'and so does disabling');
+assert.match(archive.getAttribute('aria-label'), /^归档此 Mod：/);
+assert.match(disable.getAttribute('aria-label'), /^停用此 Mod：/);
 // Renaming in place is destructive-looking; moving to a backup folder is not.
 assert.equal(archive.classList.contains('delete'), false,
   'archiving must not wear the destructive button style');

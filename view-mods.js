@@ -370,8 +370,19 @@
     return label;
   }
 
+  /* Both card actions are icon-only: the glyph is an SVG mask painted in the
+   * button's own colour (see .delete::before / .archive::before), so the label
+   * lives in aria-label instead of the text node. A busy button swaps the icon
+   * for an ellipsis, which is why it carries a class rather than just text. */
+  function markBusy(button, busy) {
+    if (!button) return;
+    button.disabled = busy;
+    button.classList.toggle('busy', busy);
+    button.textContent = busy ? '\u2026' : '';
+  }
+
   function disableButton(record) {
-    const button = el('button', '×', 'delete');
+    const button = el('button', '', 'delete');
     button.title = '停用此 Mod（原目录修改后缀）';
     button.setAttribute('aria-label', '停用此 Mod：' + record.file);
     button.disabled = location.protocol !== 'http:';
@@ -383,7 +394,7 @@
    * the backup directory as the same relative path, which is what makes it safe
    * to hand that folder to anyone or copy it to another drive. */
   function archiveButtonFor(record) {
-    const button = el('button', '\u2193', 'archive');
+    const button = el('button', '', 'archive');
     button.title = '归档此 Mod（移动到 Mod 目录之外的备份文件夹）';
     button.setAttribute('aria-label', '归档此 Mod：' + record.file);
     button.disabled = location.protocol !== 'http:';
@@ -688,7 +699,7 @@
     if (pending || !targets.length) return;
     pending = true;
     updateBulk();
-    if (button) { button.disabled = true; button.textContent = '\u2026'; }
+    if (button) markBusy(button, true);
     setStatus(targets.length === 1
       ? '正在停用 ' + targets[0].file + ' · 写入索引…'
       : `正在停用 ${targets.length} 个 Mod · 写入索引…`);
@@ -713,7 +724,7 @@
       });
     } catch (error) {
       setStatus('停用失败：' + error.message);
-      if (button) { button.disabled = false; button.textContent = '\u00d7'; }
+      if (button) markBusy(button, false);
     } finally {
       pending = false;
       updateBulk();
@@ -746,7 +757,7 @@
     if (pending || !targets.length) return;
     pending = true;
     updateBulk();
-    if (button) { button.disabled = true; button.textContent = '\u2026'; }
+    if (button) markBusy(button, true);
     setStatus(targets.length === 1
       ? '正在归档 ' + targets[0].file + ' · 移动文件…'
       : `正在归档 ${targets.length} 个 Mod · 移动文件…`);
@@ -769,7 +780,7 @@
       });
     } catch (error) {
       setStatus('归档失败：' + error.message);
-      if (button) { button.disabled = false; button.textContent = '\u2193'; }
+      if (button) markBusy(button, false);
     } finally {
       pending = false;
       updateBulk();

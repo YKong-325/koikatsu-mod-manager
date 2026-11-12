@@ -189,6 +189,19 @@ summary::marker { color: #49a2b3; }
 /* Archive is the quiet sibling: it moves the file somewhere safe instead of
    hiding it in place, so it must not wear the destructive colour. */
 .archive { width: 30px; min-height: 30px; height: 30px; padding: 0; font-size: 15px; line-height: 1; color: var(--cyan); background: #f4fbfc; border-color: #c8e2e8; }
+/* Both card actions are icon-only: a masked SVG painted in the button's own
+   colour, so the pair reads as one set instead of a letterform plus an arrow.
+   The text node stays empty; the label lives in aria-label. */
+.delete, .archive { display: grid; place-items: center; }
+.delete::before, .archive::before {
+  content: ""; display: block; width: 15px; height: 15px;
+  background: currentColor;
+  mask-size: contain; mask-position: center; mask-repeat: no-repeat;
+}
+.delete::before { mask-image: url("assets/icons/trash-2.svg"); }
+.archive::before { mask-image: url("assets/icons/archive.svg"); }
+/* Busy swaps the icon for an ellipsis, so the icon has to step aside. */
+.delete.busy::before, .archive.busy::before { display: none; }
 .actions { right: 8px; top: 8px; }
 .relation-action { color: var(--cyan); border-color: #c0dce3; background: #f3fbfc; font-size: 12px; }
 .detection-summary { border-color: var(--line); border-left: 3px solid #eca1b8; padding: 10px 12px; background: #fdf7fa; font-size: 13px; }
