@@ -59,14 +59,11 @@
   const element = el('div');
   element.id = 'trashList';
 
-  /* What the page is, then what each button does to a file. The old version was
-     four sentences of the same facts in a row, which nobody reads twice. */
-  const help = KK.hint('停用不是删除：文件还在原处，只改了后缀。', [
-    ['恢复', '改回原名'],
-    ['彻底删除', '真的删掉文件，不可撤销'],
-    ['清理失效记录', '只删日志行，不动文件']
-  ]);
-  help.classList.add('trash-help');
+  /* Two sentences, and only the thing people actually worry about: did I just
+     lose the file? The buttons say the rest themselves. */
+  const help = el('p',
+    '这些 Mod 还在硬盘上，只是后缀被改了，点「恢复」就回来。'
+    + '「彻底删除」才会真的删文件。', 'notice trash-help');
   element.append(help);
 
   const list = el('div', '', 'trash-rows');

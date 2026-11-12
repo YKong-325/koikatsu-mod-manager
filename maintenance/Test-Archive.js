@@ -124,13 +124,10 @@ tick().then(() => {
 
     // The page must say where the files went: that is the whole point of the
     // feature, and the folder is configurable.
-    assert.match($('archiveList').querySelector('.trash-help').textContent,
-      /D:\\Koikatu\\mods_archive/);
-    // Same hint shape as the deletion page: one sentence, then what 取回 does.
-    const hint = $('archiveList').querySelector('.page-hint');
+    const hint = $('archiveList').querySelector('.trash-help');
     assert.ok(hint, 'the archive page explains itself above the list');
-    assert.match(hint.querySelector('.hint-lead').textContent, /一个字节都不改/);
-    assert.equal(hint.querySelectorAll('.hint-key').length, 1);
+    assert.match(hint.textContent, /D:\\Koikatu\\mods_archive/);
+    assert.match(hint.textContent, /取回/);
     assert.ok(!/archive-log\.jsonl/.test(hint.textContent),
       'the log filename is an implementation detail, not a user-facing fact');
     assert.match($('archiveCount').textContent, /可取回 1 个/);

@@ -45,7 +45,7 @@
   const element = el('div');
   element.id = 'archiveList';
 
-  let help = el('p', '', 'notice page-hint trash-help');
+  const help = el('p', '', 'notice trash-help');
   element.append(help);
 
   const list = el('div', '', 'trash-rows');
@@ -72,14 +72,11 @@
   }
 
   /* The folder is a setting, so the sentence naming it is rewritten with the
-     list: a stale path would be worse than no sentence at all. Everything else
-     the old paragraph explained is one line of "button does consequence". */
+     list: a stale path would be worse than no sentence at all. */
   function renderHelp() {
     const where = root ? `「${root}」` : '归档文件夹';
-    return KK.hint(
-      `归档把整个包移到${where}，游戏不会加载它，包内文件一个字节都不改。`,
-      [['取回', '放回 Mod 目录的原位置']],
-      '本页不会删除任何文件', help);
+    help.textContent = `归档的包都在${where}里，游戏不会加载它们。`
+      + '点「取回」就放回原来的位置。';
   }
 
   function updateChrome() {
@@ -118,7 +115,7 @@
 
   function renderRows() {
     list.replaceChildren();
-    help = renderHelp();
+    renderHelp();
     if (!items.length) {
       list.append(el('p', '还没有任何归档。在 Mod 页点卡片右上角的归档按钮，或勾选后点「归档选中」。',
         'notice'));

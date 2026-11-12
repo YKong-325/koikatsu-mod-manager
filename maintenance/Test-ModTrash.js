@@ -89,16 +89,13 @@ tick().then(() => {
   assert.equal($('trashRestore').disabled, true, 'nothing selected yet');
   assert.equal($('trashPurge').disabled, true, 'nothing selected yet');
 
-  /* The hint is read once, in a hurry: one sentence saying what the list is,
-     then each button with what it does to a file. A paragraph of the same facts
-     was what got replaced, so keep it to that shape. */
-  const hint = $('trashList').querySelector('.page-hint');
+  /* One line above the list, and it answers the only question people have here:
+     did I lose the file? No, it just got a new suffix. No per-button glossary --
+     that reads like documentation, not like software talking to you. */
+  const hint = $('trashList').querySelector('.trash-help');
   assert.ok(hint, 'the page explains itself above the list');
-  assert.match(hint.querySelector('.hint-lead').textContent, /文件还在原处/);
-  assert.deepEqual(
-    Array.from(hint.querySelectorAll('.hint-key b')).map(node => node.textContent),
-    ['恢复', '彻底删除', '清理失效记录'],
-    'every button on the bar is explained in one place');
+  assert.match(hint.textContent, /还在硬盘上/);
+  assert.match(hint.textContent, /恢复/);
   assert.ok(!/delete-log\.jsonl/.test(hint.textContent),
     'the log filename is an implementation detail, not a user-facing fact');
   // Restoring is the safe half of the pair, so it stays a plain white button;
