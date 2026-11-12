@@ -374,6 +374,10 @@ def main():
             # shipped, so the mask had nothing to clip.
             assert b"trash-2.svg" in theme and get("/assets/icons/trash-2.svg"), \
                 "the deleted tab needs its icon"
+            # Same trap, second time: the archive tab shipped without its mask
+            # and painted a filled square. The icon ships and the tab references it.
+            assert b"archive.svg" in theme and get("/assets/icons/archive.svg"), \
+                "the archive tab needs its icon"
             assert b".detection-download{" in style
             # Archiving ships as its own tab beside the deletion list, with the
             # button that moves a package out of the mods tree on every card.

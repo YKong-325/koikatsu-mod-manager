@@ -99,9 +99,18 @@ button.tab:not(:disabled):hover::before { transform: translateY(-1px) scale(1.06
   flex: none; vertical-align: -3px; background: currentColor;
   mask-size: contain; mask-position: center; mask-repeat: no-repeat;
 }
+/* That box is painted in currentColor and only cut into shape by the mask, so a
+   tab whose mask is missing shows a solid square instead of an icon. Both the
+   deleted and the archive tab shipped that way. Tabs therefore opt in by name:
+   a new tab without a line here is simply iconless. */
+.tab::before { display: none; }
+#modsTab::before, #trashTab::before, #depsTab::before, #archiveTab::before {
+  display: inline-block;
+}
 #modsTab::before { mask-image: url("assets/icons/package.svg"); }
 #trashTab::before { mask-image: url("assets/icons/trash-2.svg"); }
 #depsTab::before { mask-image: url("assets/icons/scan-line.svg"); }
+#archiveTab::before { mask-image: url("assets/icons/archive.svg"); }
 .directory-settings::before { mask-image: url("assets/icons/settings-2.svg"); }
 #export::before, #undo::before { margin-right: 7px; }
 #export::before { mask-image: url("assets/icons/download.svg"); margin-right: 7px; }
