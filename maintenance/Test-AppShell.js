@@ -74,6 +74,17 @@ const plain = $('grid').children.find(card => card.textContent.includes('pack000
 assert.ok(!plain.querySelector('.images'), 'a pack without its own image keeps the placeholder');
 assert.match(plain.textContent, /未声明缩略图/, 'the placeholder says why it is empty');
 
+/* Three counts, one per kind of card, shown without touching any filter: which
+ * kind names a package is what decides whether it is safe to drop. */
+const cardText = path => $('grid').children
+  .find(card => card.dataset.path === path).textContent;
+assert.match(cardText('pack000.zipmod'), /被 1 张角色卡引用/);
+assert.match(cardText('pack003.zipmod'), /被 1 张场景卡引用/);
+assert.match(cardText('pack004.zipmod'), /被 1 张服装卡引用/);
+assert.match(cardText('pack001.zipmod'), /未被任何卡片引用/);
+assert.doesNotMatch(cardText('pack003.zipmod'), /张角色卡引用/,
+  'a scene reference is not counted as a character one');
+
 /* A facet value must actually filter the grid, and "referenced" must mean any
  * kind of card: a scene or an outfit is as much a reason to keep a package as a
  * character card is. */

@@ -325,6 +325,9 @@ def main():
             assert "function modRow" not in report
             assert "id: 'usage'" in report and "卡片引用" in report
             assert "unknownReferences()" in report
+            # Each card states it per kind -- character cards, outfit cards and
+            # scenes are counted apart, on the default view.
+            assert "张${kind}引用" in report and "reference-counts" in report
             # The collision facet sits next to it, and is still offered
             # dynamically -- an option nothing can be in is not drawn.
             assert "id: 'conflict'" in report

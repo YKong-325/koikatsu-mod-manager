@@ -622,24 +622,25 @@
     if (sharesGuid(record).length || (verdict && verdict.duplicateGuid)) {
       meta.prepend(conflictBanner(record));
     }
-    /* The reference count is only worth the pixels while the filter is asking
-     * about references; on the default view it is a line of text above a cover
-     * nobody has to read to use the grid. */
-    if (!KK.facetValue('usage')) return;
     if (!verdict) return;
     const state = cardState(record);
+    /* Three answers instead of one total: a package worn by one character and
+     * a prop placed in one scene are both "referenced", yet only the first is
+     * obviously worth keeping. Each kind gets its own line, so the card can be
+     * read without opening the dependency view -- and it is shown on the
+     * default view, not only while the facet is asking about references. */
     const refs = references(verdict);
-    const label = {
-      unmatched: '未被任何卡片引用',
-      matched: `被 ${refs.total} 张卡片引用`,
-      unknown: record.guid ? '资源卡索引不足，无法判断' : '包内未声明 GUID，无法判断'
-    }[state];
-    if (label) {
-      meta.append(el('div', label, 'detection-label ' +
-        (state === 'matched' ? 'installed' : 'duplicate')));
+    const counts = [['角色卡', refs.cards], ['服装卡', refs.outfits],
+      ['场景卡', refs.scenes]].filter(([, count]) => count);
+    if (counts.length) {
+      const box = el('div', undefined, 'reference-counts installed');
+      for (const [kind, count] of counts) box.append(el('div', `被 ${count} 张${kind}引用`));
+      meta.append(box);
+    } else if (state === 'unmatched') {
+      meta.append(el('div', '未被任何卡片引用', 'detection-label duplicate'));
+    } else if (state === 'unknown' && KK.facetValue('usage') === 'unknown') {
+      meta.append(el('div', record.guid ? '资源卡索引不足，无法判断' : '包内未声明 GUID，无法判断',
+        'detection-label'));
     }
-    const breakdown = [['角色卡', refs.cards], ['服装卡', refs.outfits], ['场景', refs.scenes]]
-      .filter(([, count]) => count).map(([kind, count]) => `${kind} ${count}`);
-    if (breakdown.length) meta.append(el('div', breakdown.join(' · '), 'notice'));
   });
 })();

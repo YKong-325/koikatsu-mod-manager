@@ -60,6 +60,9 @@ body.marquee-active{user-select:none;cursor:crosshair}
 .detection-summary{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 18px;padding:12px 0;border-top:1px solid #d8dde2;line-height:1.6}
 .detection-summary .notice{flex-basis:100%;margin:0}
 .detection-label{font-size:13px;font-weight:600;margin-top:10px;overflow-wrap:anywhere}
+/* One line per kind of card that names this package. Kept small and tight, so
+ * a well-used package does not grow three headlines taller than its cover. */
+.reference-counts{margin-top:8px;font-size:12px;line-height:1.45}
 /* A GUID collision is decided by the game, not by the manager, but both packs
    stay installed: the card has to say so above the package name, where the
    "why is this mod doing nothing" question starts. The title attribute names
