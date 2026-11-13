@@ -59,6 +59,9 @@ const sort = $('sort');
 assert.equal(sort.children.length, 8, 'every key the catalog can answer is offered');
 assert.deepEqual(sort.children.map(option => option.value),
   ['path', 'name', 'name-desc', 'added', 'added-asc', 'size', 'size-asc', 'items']);
+// "By path" describes the mechanism, not the choice; the first entry is the
+// order the grid opens in, and it says so.
+assert.equal(sort.children[0].textContent, '默认排序');
 
 assert.deepEqual(order(), [
   'a/delta.zipmod', 'a/gamma.zipmod', 'b/alpha.zipmod',

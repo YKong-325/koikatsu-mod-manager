@@ -91,7 +91,7 @@
   const sort = el('select');
   sort.id = 'sort';
   sort.setAttribute('aria-label', '排序');
-  [['path', '按路径'], ['name', '按名称 A→Z'], ['name-desc', '按名称 Z→A'],
+  [['path', '默认排序'], ['name', '按名称 A→Z'], ['name-desc', '按名称 Z→A'],
     ['added', '按创建时间 新→旧'], ['added-asc', '按创建时间 旧→新'],
     ['size', '按体积 大→小'], ['size-asc', '按体积 小→大'],
     ['items', '按条目数 多→少']]
