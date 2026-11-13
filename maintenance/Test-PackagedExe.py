@@ -258,6 +258,9 @@ def main():
             assert len(records) == (3 if args.render_sample else 2), records
             sample_record = next(r for r in records if r["path"] == "sample.zipmod")
             assert sample_record["guid"] == "sample"
+            # The grid can sort by when a package arrived only because the
+            # builder writes that timestamp down.
+            assert sample_record["ctimeNs"] > 0, sample_record.keys()
             if args.thumbnail_sample:
                 assert sample_record["images"] and not sample_record["previewErrors"], sample_record
                 preview = get("/" + sample_record["images"][0]["src"])
@@ -379,6 +382,11 @@ def main():
             # The selection is already visible on the cards, so there is no
             # "picked only" entry among the preview states.
             assert '"picked"' not in grid_js and "已选中的 Mod" not in grid_js
+            # Sorting reads the creation time the builder records, and the
+            # shipped page has to offer that key for the field to be worth
+            # writing at all.
+            assert "按创建时间 新→旧" in grid_js and "'added-asc'" in grid_js
+            assert "ctimeNs" in grid_js
             style = get("/manager.css")
             theme = get("/theme.css")
             assert b".bulk-render{color:#fff;background:#c5304a" in style, style[:400]

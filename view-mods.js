@@ -91,7 +91,10 @@
   const sort = el('select');
   sort.id = 'sort';
   sort.setAttribute('aria-label', '排序');
-  [['path', '按路径'], ['size', '按体积降序'], ['items', '按条目数降序']]
+  [['path', '按路径'], ['name', '按名称 A→Z'], ['name-desc', '按名称 Z→A'],
+    ['added', '按创建时间 新→旧'], ['added-asc', '按创建时间 旧→新'],
+    ['size', '按体积 大→小'], ['size-asc', '按体积 小→大'],
+    ['items', '按条目数 多→少']]
     .forEach(([value, label]) => {
       const option = el('option', label);
       option.value = value;
@@ -269,6 +272,32 @@
 
   /* ---------------------------------------------------------------- filter */
 
+  /* Sorting answers the two questions a grid this size raises: what is this
+   * called, and did I just add it. Ties fall back to the path so the same
+   * catalog always lands in the same order, and numbers inside names compare as
+   * numbers -- "Mod 2" before "Mod 10", which a plain string sort gets wrong. */
+  const collator = new Intl.Collator(['zh-Hans-CN', 'en'],
+    {numeric: true, sensitivity: 'base'});
+  const titleOf = record => record.name || record.file || record.path;
+  /* Windows keeps the moment a file appeared on the volume as its creation
+   * time; mtime follows the timestamp the archive was packed with, so a freshly
+   * copied mod can look years old. Catalogs built before this field existed
+   * fall back to mtime rather than sorting everything as 1970. */
+  const addedAt = record => Number(record.ctimeNs || record.mtimeNs || 0);
+  const byPath = (a, b) => collator.compare(a.path, b.path);
+  const byTitle = (a, b) => collator.compare(titleOf(a), titleOf(b)) || byPath(a, b);
+  const byAdded = (a, b) => addedAt(b) - addedAt(a) || byPath(a, b);
+  const ORDERS = {
+    path: byPath,
+    name: byTitle,
+    'name-desc': (a, b) => collator.compare(titleOf(b), titleOf(a)) || byPath(a, b),
+    added: byAdded,
+    'added-asc': (a, b) => addedAt(a) - addedAt(b) || byPath(a, b),
+    size: (a, b) => b.bytes - a.bytes || byPath(a, b),
+    'size-asc': (a, b) => a.bytes - b.bytes || byPath(a, b),
+    items: (a, b) => b.items.length - a.items.length || byPath(a, b)
+  };
+
   function apply(options = {}) {
     const name = modName.value, all = query.value;
     const slotValue = slot.value, imageValue = image.value, queries = facetQueries();
@@ -293,10 +322,7 @@
       return true;
     });
 
-    const order = sort.value;
-    filtered.sort(order === 'size' ? (a, b) => b.bytes - a.bytes
-      : order === 'items' ? (a, b) => b.items.length - a.items.length
-        : (a, b) => a.path.localeCompare(b.path));
+    filtered.sort(ORDERS[sort.value] || byPath);
     if (!options.keepPage) page = 0;
     updateFacetOptions();
     render();

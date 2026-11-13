@@ -503,6 +503,11 @@ def sync_records(mods, out, reuse=True, progress=None, game=None, workers=None):
             record = scan_one(path, mods, out)
         extract_game_thumbnails(record, game or mods.parent, out)
         record["mtimeNs"] = stat.st_mtime_ns
+        # When the package landed in the mods tree, which is what "sort by
+        # newest" means to someone who just dropped a download in. Windows
+        # records that as the creation time; mtime follows whatever timestamp
+        # the archive was packed with, so a mod installed today can claim 2019.
+        record["ctimeNs"] = stat.st_ctime_ns
         return record
 
     # Unity bundles expand in memory; keep only a small number active together.
